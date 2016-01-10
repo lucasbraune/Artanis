@@ -10,6 +10,7 @@ public class RobotPlayer {
 	
 	private static RobotController rc;
 	private static Team myTeam, enemyTeam; 
+	private static int[] possibleDirections = {0,1,-1,2,-2,3,-3}; 
 	
 	public static void run(RobotController rcIn){
 		
@@ -43,15 +44,37 @@ public class RobotPlayer {
 
 	private static void soldierCode() throws GameActionException {
 		int myAttackRadius = rc.getType().attackRadiusSquared;
-		
-		if(rc.isWeaponReady()){
-			RobotInfo[] enemyRobots = rc.senseHostileRobots(rc.getLocation(), myAttackRadius);
-			if(enemyRobots.length>0){
+
+		RobotInfo[] enemyRobots = rc.senseHostileRobots( rc.getLocation(), myAttackRadius );
+		if(enemyRobots.length>0 && rc.isWeaponReady()){
 				rc.attackLocation( findWeakestEnemy(enemyRobots) );
-			}
-			
+		} else if ( rc.isCoreReady() ) {
+			tryToMove( Direction.SOUTH );
 		}
-			
+
+	}
+	
+	private static void tryToMove ( Direction dir ) throws GameActionException {
+
+		// This was taken from Max Mann's tutorials.
+		// The idea is to try to move towards dir. If you can't, try to move
+		// after changing dir by +1, -1, +2, -2, +3, -3 (meaning that you
+		// rotate dir left or right up to three times).
+		// Reading the code below bear in mind that 
+		// Direction.values() retorns an arrway with the the
+		// possible directions, i.e., WEST, NORTHWEST, etc.
+		// The method dir.ordinal() returns the index of
+		// the direciton dir in this array.
+		
+		Direction candidateDirection = dir;
+		
+		for(int i=0; i<possibleDirections.length; i++ ){
+			candidateDirection = Direction.values()[ ( dir.ordinal() + possibleDirections[i] + 8 ) % 8 ];
+			if( rc.canMove(candidateDirection) ){
+				rc.move(candidateDirection);
+				break;
+			}
+		}
 	}
 	
 	private static MapLocation findWeakestEnemy( RobotInfo[] enemyRobots ) {
