@@ -1,5 +1,6 @@
 package artanis;
 
+import java.util.ArrayList;
 import java.util.Random;
 
 import battlecode.common.*;
@@ -8,15 +9,20 @@ public class RobotPlayer {
 
 	private static Random rnd;
 	
-	private static RobotController rc;
-	private static Team myTeam, enemyTeam; 
-	private static int[] possibleDirections = {0,1,-1,2,-2,3,-3}; 
+	private static RobotController rc; 
+	private static int[] possibleDirections = {0,1,-1,2,-2,3,-3};
+	private static ArrayList<MapLocation> pastLocations = new ArrayList<MapLocation>();
+	private static final int LOCATIONS_REMEMBERED = 10;
+	
+	private static final int MAX_PATIENCE = 10;
+	private static final int MIN_PATIENCE = -10;
+	private static final int PATIENCE_DECREASE = 3;
+	private static final int PATIENCE_INCREASE = 1;
+	private static int patience = MAX_PATIENCE; // Start clearing rubble if this drops below zero;
 	
 	public static void run(RobotController rcIn){
 		
 		rc = rcIn;
-		myTeam = rc.getTeam();
-		enemyTeam = myTeam.opponent();
 		
 		rnd = new Random(rc.getID());
 		
@@ -49,7 +55,10 @@ public class RobotPlayer {
 		if(enemyRobots.length>0 && rc.isWeaponReady()){
 				rc.attackLocation( findWeakestEnemy(enemyRobots) );
 		} else if ( rc.isCoreReady() ) {
-			tryToMove( Direction.SOUTH );
+			if (rc.getTeam() == Team.A)
+				tryToMove( Direction.SOUTH );
+			else
+				tryToMove( Direction.NORTH );
 		}
 
 	}
@@ -61,19 +70,53 @@ public class RobotPlayer {
 		// after changing dir by +1, -1, +2, -2, +3, -3 (meaning that you
 		// rotate dir left or right up to three times).
 		// Reading the code below bear in mind that 
-		// Direction.values() retorns an arrway with the the
-		// possible directions, i.e., WEST, NORTHWEST, etc.
-		// The method dir.ordinal() returns the index of
-		// the direciton dir in this array.
+		// Direction.values() returns an arrway with the the
+		// possible directions, i.e., WEST, NORTHWEST, etc. and
+		// the method dir.ordinal() returns the index of
+		// the direction dir in this array.
 		
 		Direction candidateDirection = dir;
 		
+		pastLocations.add( rc.getLocation() );
+		if (pastLocations.size() > LOCATIONS_REMEMBERED ) {
+			pastLocations.remove(0);
+		}
+		
 		for(int i=0; i<possibleDirections.length; i++ ){
+			
 			candidateDirection = Direction.values()[ ( dir.ordinal() + possibleDirections[i] + 8 ) % 8 ];
-			if( rc.canMove(candidateDirection) ){
+			MapLocation candidateLocation = rc.getLocation().add( candidateDirection );
+			
+			
+			if( rc.canMove(candidateDirection) && !pastLocations.contains( candidateLocation ) ){
 				rc.move(candidateDirection);
+				increasePatience();
 				break;
+			} else {
+				decreasePatience();
 			}
+			
+			if (patience < 0 ) {
+				if ( rc.senseRubble( rc.getLocation().add( dir ) ) > GameConstants.RUBBLE_OBSTRUCTION_THRESH ) {
+					rc.clearRubble( dir );
+					patience += PATIENCE_INCREASE;
+				}
+			}
+		}
+	}
+	
+	private static void increasePatience() {
+		if ( patience <= MAX_PATIENCE - PATIENCE_INCREASE) {
+			patience += PATIENCE_INCREASE;
+		} else {
+			patience = MAX_PATIENCE;
+		}
+	}
+	
+	private static void decreasePatience() {
+		patience -= PATIENCE_DECREASE;
+		if (patience <= MIN_PATIENCE) {
+			patience = MIN_PATIENCE;
 		}
 	}
 	
