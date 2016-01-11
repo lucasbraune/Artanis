@@ -5,17 +5,15 @@ import battlecode.common.*;
 public class RobotPlayer {
 	
 	public static RobotController rc; 
-	public static Team myTeam;
-	public static Signal[] signalQueue; 
-	public static boolean isMasterArchon = false; // Identifies the leading Archon.
 	
-	private static Direction groupDirection;
+	private static Signal[] signalQueue;
+	private static Direction myDirection;
+	public static boolean isMasterArchon = false;
 	
 	public static void run(RobotController rcIn){
 		
 		rc = rcIn;
-		myTeam = rc.getTeam();
-		groupDirection = Movement.randomDirection();
+		myDirection = Movement.randomDirection();
 		
 		try {
 			if( rc.getType() == RobotType.ARCHON )
@@ -26,8 +24,6 @@ public class RobotPlayer {
 		
 		while(true){
 			try{
-				signalQueue = rc.emptySignalQueue();
-				
 				if(rc.getType()==RobotType.ARCHON){
 					archonCode();
 				}else if(rc.getType()==RobotType.TURRET){
@@ -53,12 +49,14 @@ public class RobotPlayer {
 
 	private static void soldierCode() throws GameActionException {
 		int myAttackRadius = rc.getType().attackRadiusSquared;
-
 		RobotInfo[] enemyRobots = rc.senseHostileRobots( rc.getLocation(), myAttackRadius );
+		
 		if(enemyRobots.length>0 && rc.isWeaponReady()){
 				rc.attackLocation( Attack.findWeakestEnemy(enemyRobots) );
 		} else {
-			Movement.simpleMove( Communication.getDirectionOfGroupTarget() );
+			signalQueue = rc.emptySignalQueue();
+			myDirection = rc.getLocation().directionTo( Communication.readTargetLocation( signalQueue ) );
+			Movement.simpleMove( myDirection );
 		}
 
 	}
@@ -90,32 +88,34 @@ public class RobotPlayer {
 	}
 
 	private static void archonCode() throws GameActionException {
-		
+		MapLocation aFewStepsAheadOfMe;
 		if ( isMasterArchon == true ) {
 			// Master archon code:
-			
 			// Master archon movement = movement of the whole group
 			if( rc.getRoundNum() % 4 != 1 ) {
-				rc.broadcastMessageSignal( groupDirection.ordinal() , 0, 1000 );
+				aFewStepsAheadOfMe = Movement.getLocationAhead( myDirection );
+				Communication.broadcastTargetLocation( aFewStepsAheadOfMe );
 			} else {
-				if ( !rc.onTheMap( rc.getLocation().add(groupDirection, 4) ) ) {
-					groupDirection = Movement.randomDirection();
+				if ( !rc.onTheMap( rc.getLocation().add(myDirection, 4) ) ) {
+					myDirection = Movement.randomDirection();
+					// this changes directions if current one leads out of the map.
 				}
 				else {
-					Movement.simpleMove( groupDirection );
+					Movement.simpleMove( myDirection );
 				}
 			}
 		} else {
-			// Normal archon code:
-			
-			// The following has some bytecode inefficiency because archons
-			// end up calling rc.isCoreReady() twice before moving. 
+			// Normal archon code
+			// (The following has some bytecode inefficiency because archons
+			// end up calling rc.isCoreReady() twice before moving.) 
 			if(rc.isCoreReady()){
 				Direction randomDir = Movement.randomDirection();
 				if(rc.canBuild(randomDir, RobotType.SOLDIER)){
 					rc.build(randomDir, RobotType.SOLDIER);
 				} else {
-					Movement.simpleMove( Communication.getDirectionOfGroupTarget() );
+					signalQueue = rc.emptySignalQueue();
+					myDirection = rc.getLocation().directionTo( Communication.readTargetLocation( signalQueue ) );
+					Movement.simpleMove( myDirection );
 				}
 			}
 		}

@@ -8,23 +8,26 @@ public class Movement {
 	
 	private static RobotController rc = RobotPlayer.rc;
 	
-	private static Random rnd = new Random ( rc.getID() );
-	
+	// Units will avoid going where they have already been.
 	private static final int[] possibleDirections = {0,1,-1,2,-2,3,-3};
 	private static ArrayList<MapLocation> pastLocations = new ArrayList<MapLocation>();
 	private static final int LOCATIONS_REMEMBERED = 10;
 	
+	// Start clearing rubble if patience drops below zero;
 	private static final int MAX_PATIENCE = 10;
 	private static final int MIN_PATIENCE = -10;
 	private static final int PATIENCE_DECREASE = 3;
 	private static final int PATIENCE_INCREASE = 1;
-	private static int patience = MAX_PATIENCE; // Start clearing rubble if this drops below zero;
+	private static int patience = MAX_PATIENCE; 
 	
-	public static final int STEPS_AHEAD_OF_MASTER_ARCHON = 3;
+	// Units will gather a few steps ahead of the master archon.
+	public static final int STEPS_AHEAD = 3;
 	
+	// This is used in the randomDirection() method
+	private static Random rnd = new Random ( rc.getID() );
+	
+	// This was taken from Max Mann's tutorials.
 	public static void simpleMove ( Direction dir ) throws GameActionException {
-		// This was taken from Max Mann's tutorials.
-		
 		Direction candidateDirection = dir;
 		boolean coreReady;
 		
@@ -32,7 +35,6 @@ public class Movement {
 			return;
 		
 		coreReady = rc.isCoreReady();
-		
 		if ( coreReady ) {
 			
 			pastLocations.add( rc.getLocation() );
@@ -83,7 +85,9 @@ public class Movement {
 	public static Direction randomDirection() {
 		return Direction.values()[(int)(rnd.nextDouble()*8)];
 	}
-
 	
-
+	public static MapLocation getLocationAhead ( Direction dir ) {
+		return rc.getLocation().add( dir , STEPS_AHEAD );
+	}
+	
 }
