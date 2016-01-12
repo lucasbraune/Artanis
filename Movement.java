@@ -146,4 +146,25 @@ public class Movement {
 		return rc.getLocation().add( dir , STEPS_AHEAD );
 	}
 	
+	public static MapLocation findClosest( MapLocation[] locations ) {	
+		MapLocation closest; 
+		int distanceToClosest, distanceToThisOne;
+		
+		if( locations.length > 0 ) {
+			closest = locations[0];
+			distanceToClosest = rc.getLocation().distanceSquaredTo( closest );
+			for( int i=1; i<locations.length; i++ ) {
+				distanceToThisOne = rc.getLocation().distanceSquaredTo( locations[i] );
+				if( distanceToThisOne < distanceToClosest ) {
+					closest = locations[i];
+					distanceToClosest = distanceToThisOne;
+				}
+			}
+			return closest;
+		}
+		else {
+			return null;
+		}
+	}
+	
 }

@@ -1,8 +1,20 @@
 package artanis;
 
+import java.util.ArrayList;
+
 import battlecode.common.*;
 
 public class Attack {
+	
+	// This overload is here because I failed to convert an ArrayList into an array elsewhere.
+	public static MapLocation findWeakestEnemy( ArrayList<RobotInfo> enemyRobots ){
+		RobotInfo[] enemies = new RobotInfo[ enemyRobots.size() ];
+		
+		for(int i=0; i<enemies.length; i++){
+			enemies[i] = enemyRobots.get(i);
+		}
+		return findWeakestEnemy( enemies );
+	}
 	
 	public static MapLocation findWeakestEnemy( RobotInfo[] enemyRobots ) {
 		int numberOfEnemies = enemyRobots.length;

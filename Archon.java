@@ -13,7 +13,7 @@ public class Archon {
 	private static boolean askedScouts = false; 
 	private static int wait=0;
 	// Normal archon variables
-	private static RobotType typeToBeBuilt = RobotType.SCOUT;
+	private static RobotType typeToBeBuilt = RobotType.SOLDIER;
 	
 	// Archon messages start at 1000. Public so that other units can read.
 	public static final int I_AM_THE_MASTER = 1000;
@@ -57,21 +57,36 @@ public class Archon {
 			Direction randomDir = Movement.randomDirection();
 			int typeNumber;
 			MapLocation targetLocation;
+			MapLocation[] partsLocations;
 			
 			signalQueue = rc.emptySignalQueue();
+			targetLocation = Communication.getLocation( signalQueue, Archon.TARGET_LOCATION );
 			typeNumber = getBuildRequest( signalQueue );
-			
 			if( typeNumber >= 0 ) {
 				typeToBeBuilt = RobotType.values()[ typeNumber ];
 			} 
 			
-			if( rc.canBuild( randomDir, typeToBeBuilt ) ){
-				rc.build(randomDir, typeToBeBuilt);
-				if (typeToBeBuilt != RobotType.SOLDIER ) {
-					typeToBeBuilt = RobotType.SOLDIER;
+			if( rc.getLocation().distanceSquaredTo( targetLocation ) < rc.getType().attackRadiusSquared ){
+				partsLocations = rc.sensePartLocations(-1);
+				if( partsLocations.length > 0 ) {
+					myDirection = rc.getLocation().directionTo( Movement.findClosest( partsLocations ) );
+					Movement.simpleMove( myDirection );
+				} else if( rc.canBuild( randomDir, typeToBeBuilt ) ){
+					rc.build(randomDir, typeToBeBuilt);
+					if (typeToBeBuilt != RobotType.SOLDIER ) {
+						typeToBeBuilt = RobotType.SOLDIER;
+					}
+				} else {
+					if( targetLocation != null ){
+						myDirection = rc.getLocation().directionTo( targetLocation );
+					}
+					else {
+						myDirection = Movement.randomDirection();
+					}
+					Movement.simpleMove( myDirection );
 				}
 			} else {
-				targetLocation = Communication.getLocation( signalQueue, Archon.TARGET_LOCATION );
+				
 				if( targetLocation != null ){
 					myDirection = rc.getLocation().directionTo( targetLocation );
 				}
@@ -175,7 +190,7 @@ public class Archon {
 		if( !askedScouts ){
 			rc.broadcastMessageSignal(0, WHERE_IS_THE_ENEMY, Communication.LARGE_RADIUS);
 			askedScouts = true;
-			wait = 150;
+			wait = 50;
 			rc.setIndicatorString(1, "I asked scouts the enemy location." );
 			return;
 		}
@@ -183,7 +198,7 @@ public class Archon {
 		if( askedScouts ){
 			sendBuildRequest( RobotType.SCOUT );
 			askedScouts = false;
-			wait = 150;
+			wait = 50;
 			rc.setIndicatorString(1, "No scouts replied. I ordered some more from Amazon.");
 		}
 	}
