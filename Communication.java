@@ -5,47 +5,47 @@ import battlecode.common.*;
 public class Communication {
 	
 	private static RobotController rc = RobotPlayer.rc;
-	private static Team myTeam = rc.getTeam();
+	private static Team myTeam = rc.getTeam(); 
 
-	// normal scout broadcast square radius
-	public static final int BROADCAST_RADIUS_SQUARED = 1000; 
+	public static final int SMALL_RADIUS = 1000;
+	public static final int LARGE_RADIUS = 10000;
 	
-	// This implementation broadcasts the displacement from the archon to the
-	// target location. The displacement is encoded using the
-	// positionToInteger() method.
-	public static void broadcastTargetLocation ( MapLocation targetLocation ) throws GameActionException {
-		int v[] = new int[2];
-		v[0] = targetLocation.x - rc.getLocation().x;
-		v[1] = targetLocation.y - rc.getLocation().y;
-		rc.broadcastMessageSignal( positionToInteger(v), rc.getType().ordinal(), BROADCAST_RADIUS_SQUARED );
-	}
-	
-	public static MapLocation readTargetLocation( Signal[] signals ) {
-		Signal latestSignal = getSignalFromArchon( signals );
-		MapLocation archonLocation = null, targetLocation = null;
-		int[] message, displacement;
-		if ( latestSignal != null ) {
-			archonLocation =  latestSignal.getLocation();
-			message = latestSignal.getMessage();
-			if ( message.length>0 ) {
-				displacement = integerToPosition( message[0] );
-				targetLocation = archonLocation.add( displacement[0], displacement[1] );
-			}
-		}
-		return targetLocation;
-	}
-
-	public static Signal getSignalFromArchon ( Signal[] signals ) {
+	public static Signal getSignal ( Signal[] signals, int messageType ) {
 		Signal latestSignal = null;
 		for( int i=signals.length-1; i >= 0; i-- ) {
 			if ( signals[i].getTeam() == myTeam  && 
-					signals[i].getMessage()[1] == RobotType.ARCHON.ordinal() ) {
+					signals[i].getMessage()[1] == messageType ) {
 				latestSignal = signals[i];
 				break;
 			}
 		}
 		return latestSignal;
-	} 
+	}
+	
+	// This implementation broadcasts the displacement from the archon to the
+	// target location. The displacement is encoded using the
+	// positionToInteger() method.
+	public static void broadcastLocation( MapLocation location, int messageType, int broadcastRadius ) throws GameActionException {
+		int v[] = new int[2];
+		v[0] = location.x - rc.getLocation().x;
+		v[1] = location.y - rc.getLocation().y;
+		rc.broadcastMessageSignal( positionToInteger(v), messageType, broadcastRadius );
+	}
+	
+	public static MapLocation getLocation( Signal[] signals, int messageType ) {
+		Signal signal = getSignal( signals, messageType );
+		MapLocation senderLocation = null, targetLocation = null;
+		int[] message, displacement;
+		if ( signal != null ) {
+			senderLocation =  signal.getLocation();
+			message = signal.getMessage();
+			if ( message.length>0 ) {
+				displacement = integerToPosition( message[0] );
+				targetLocation = senderLocation.add( displacement[0], displacement[1] );
+			}
+		}
+		return targetLocation;
+	}
 
 	// Encodes an array of two integers between -100 and 100 
 	// into a single integer.
@@ -66,15 +66,4 @@ public class Communication {
 		return v;
 	}
 
-	// This method will run at the beginning of the game for all archons in some
-	// order. Only the first one will satisfy the 'if' statement.
-	public static void electMasterArchon() throws GameActionException {
-		Signal latestSignal = getSignalFromArchon( rc.emptySignalQueue() );
-
-		if( latestSignal == null ) {
-			RobotPlayer.isMasterArchon = true;
-			rc.setIndicatorString(0, "Hello. I am the MASTER ARCHON.");
-		}
-		rc.broadcastMessageSignal(rc.getID(), RobotType.ARCHON.ordinal(), 10000);
-	}
 }

@@ -21,7 +21,7 @@ public class Movement {
 	private static int patience = MAX_PATIENCE; 
 	
 	// Units will gather a few steps ahead of the master archon.
-	public static final int STEPS_AHEAD = 3;
+	private static final int STEPS_AHEAD = 3;
 	
 	// This is used in the randomDirection() method
 	private static Random rnd = new Random ( rc.getID() );
@@ -63,10 +63,66 @@ public class Movement {
 					patience += PATIENCE_INCREASE;
 				}
 			}
-		
+
+		}
+	}
+
+	public static void moveAvoidingEnemies ( Direction dir, RobotInfo[] enemies ) throws GameActionException {
+		Direction candidateDirection = dir;
+		boolean coreReady;
+
+		if ( dir == null ) 
+			return;
+
+		coreReady = rc.isCoreReady();
+		if ( coreReady ) {
+
+			pastLocations.add( rc.getLocation() );
+			if (pastLocations.size() > LOCATIONS_REMEMBERED ) {
+				pastLocations.remove(0);
+			}
+
+			for(int i=0; i<possibleDirections.length; i++ ){
+				candidateDirection = Direction.values()[ ( dir.ordinal() + possibleDirections[i] + 8 ) % 8 ];
+				MapLocation candidateLocation = rc.getLocation().add( candidateDirection );
+
+				if( rc.canMove(candidateDirection) && !pastLocations.contains( candidateLocation )
+						&& enemiesCannotShoot( enemies, candidateLocation )){
+					rc.move(candidateDirection);
+					coreReady = false;
+					break;
+				} 
+			}
+			// If scout hasn't moved, it is possibly because it was afraid of enemies.
+			// Now it will become brave and try to move again.
+			if ( coreReady ) {
+				for(int i=0; i<possibleDirections.length; i++ ){
+					candidateDirection = Direction.values()[ ( dir.ordinal() + possibleDirections[i] + 8 ) % 8 ];
+					MapLocation candidateLocation = rc.getLocation().add( candidateDirection );
+
+					if( rc.canMove(candidateDirection) && !pastLocations.contains( candidateLocation ) ){
+						rc.move(candidateDirection);
+						coreReady = false;
+						break;
+					} 
+				}
+			}
+			
 		}
 	}
 	
+	private static boolean enemiesCannotShoot(RobotInfo[] enemies, MapLocation candidateLocation) {
+		boolean safe = true;
+		int enemyRange;
+		for( int i=0; i<enemies.length; i++ ){
+			enemyRange = enemies[i].location.distanceSquaredTo( candidateLocation ); 
+			if( enemyRange <= RobotType.SOLDIER.attackRadiusSquared ) {
+				safe = false;
+			}
+		}
+		return safe;
+	}
+
 	private static void increasePatience() {
 		if ( patience <= MAX_PATIENCE - PATIENCE_INCREASE) {
 			patience += PATIENCE_INCREASE;
