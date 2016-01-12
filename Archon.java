@@ -51,53 +51,60 @@ public class Archon {
 			normalArchonCode();
 		}
 	}
-	
+
 	private static void normalArchonCode() throws GameActionException {
 		if(rc.isCoreReady()){
 			Direction randomDir = Movement.randomDirection();
 			int typeNumber;
 			MapLocation targetLocation;
 			MapLocation[] partsLocations;
-			
+
 			signalQueue = rc.emptySignalQueue();
 			targetLocation = Communication.getLocation( signalQueue, Archon.TARGET_LOCATION );
 			typeNumber = getBuildRequest( signalQueue );
 			if( typeNumber >= 0 ) {
 				typeToBeBuilt = RobotType.values()[ typeNumber ];
 			} 
-			
-			if( rc.getLocation().distanceSquaredTo( targetLocation ) < rc.getType().attackRadiusSquared ){
-				partsLocations = rc.sensePartLocations(-1);
-				if( partsLocations.length > 0 ) {
-					myDirection = rc.getLocation().directionTo( Movement.findClosest( partsLocations ) );
+
+			if( targetLocation != null ) {
+				if( rc.getLocation().distanceSquaredTo( targetLocation ) < rc.getType().attackRadiusSquared ){
+					if( rc.canBuild( randomDir, typeToBeBuilt ) ){
+						rc.build(randomDir, typeToBeBuilt);
+						if (typeToBeBuilt != RobotType.SOLDIER ) {
+							typeToBeBuilt = RobotType.SOLDIER;
+						}
+					} else {
+						partsLocations = rc.sensePartLocations(-1);
+						if( partsLocations.length > 0 ) {
+							myDirection = rc.getLocation().directionTo( Movement.findClosest( partsLocations ) );
+						} else {
+							myDirection = rc.getLocation().directionTo( targetLocation );
+						}
+						Movement.simpleMove( myDirection );
+					}
+				} else {
+					myDirection = rc.getLocation().directionTo( targetLocation );
 					Movement.simpleMove( myDirection );
-				} else if( rc.canBuild( randomDir, typeToBeBuilt ) ){
+				}
+			} else {
+				if( rc.canBuild( randomDir, typeToBeBuilt ) ){
 					rc.build(randomDir, typeToBeBuilt);
 					if (typeToBeBuilt != RobotType.SOLDIER ) {
 						typeToBeBuilt = RobotType.SOLDIER;
 					}
 				} else {
-					if( targetLocation != null ){
-						myDirection = rc.getLocation().directionTo( targetLocation );
-					}
-					else {
+					partsLocations = rc.sensePartLocations(-1);
+					if( partsLocations.length > 0 ) {
+						myDirection = rc.getLocation().directionTo( Movement.findClosest( partsLocations ) );
+					} else {
 						myDirection = Movement.randomDirection();
 					}
 					Movement.simpleMove( myDirection );
 				}
-			} else {
-				
-				if( targetLocation != null ){
-					myDirection = rc.getLocation().directionTo( targetLocation );
-				}
-				else {
-					myDirection = Movement.randomDirection();
-				}
-				Movement.simpleMove( myDirection );
 			}
 		}
 	}
-	
+
 	private static int getBuildRequest( Signal[] signals ) {
 		Signal signal = Communication.getSignal( signals, BUILD_TYPE );
 		if( signal != null && signal.getMessage().length > 0 ){
