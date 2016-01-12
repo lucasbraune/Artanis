@@ -8,15 +8,13 @@ public class Scout {
 	private static Signal[] signalQueue;
 	private static Direction myDirection;
 
-	MapLocation enemyLocation = null;
-	public static boolean shouldBroadcast = true;
+	private static MapLocation enemyLocation = null;
 
 	// Message types. Start at 2001.
 	public static final int ENEMY_LOCATION = 2000;
 
 	public static void code( ){
 		rc = RobotPlayer.rc;
-		
 		myDirection = Movement.randomDirection();
 
 		try {
@@ -24,18 +22,14 @@ public class Scout {
 		} catch ( Exception e ) {
 			e.printStackTrace();
 		}
-
-		while(true){
-			
+		while(true){	
 			try{
 				repeat();
 			}catch ( Exception e ) {
 				e.printStackTrace();
 			}
-			
 			Clock.yield();
-		}	
-
+		}
 	}
 	
 	private static void runsOnce() throws GameActionException {
@@ -44,17 +38,25 @@ public class Scout {
 	
 	private static void repeat() throws GameActionException {
 		RobotInfo[] enemies;
-		if( shouldBroadcast ) {
-			enemies = rc.senseNearbyRobots( RobotType.SCOUT.sensorRadiusSquared, rc.getTeam().opponent() );
-			if ( enemies.length > 0 ) {
-				Communication.broadcastLocation( enemies[0].location, ENEMY_LOCATION, Communication.LARGE_RADIUS);
-				shouldBroadcast = false;
-			}
+		Signal request;
+		
+		enemies = rc.senseNearbyRobots( RobotType.SCOUT.sensorRadiusSquared, rc.getTeam().opponent() );
+		
+		if( enemies.length>3 ){
+			enemyLocation = enemies[0].location;
 		}
 		
+		signalQueue = rc.emptySignalQueue();
+		request = Communication.getSignal( signalQueue, Archon.WHERE_IS_THE_ENEMY );
+		
+		if( request != null && enemyLocation != null ) {
+			Communication.broadcastLocation( enemyLocation, ENEMY_LOCATION, Communication.LARGE_RADIUS);
+			rc.setIndicatorString(0, "At some point I broadcast an enemy's location." );
+		}
+		
+		// this changes directions if current one leads out of the map.
 		if ( !rc.onTheMap( rc.getLocation().add( myDirection ) ) ) {
-			myDirection = Movement.randomDirection();
-			// this changes directions if current one leads out of the map.
+			myDirection = Movement.randomDirection();	
 		}
 		else {
 			Movement.moveAvoidingEnemies( myDirection, rc.senseHostileRobots( rc.getLocation(), -1 ));
