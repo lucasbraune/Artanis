@@ -8,8 +8,6 @@ public class Soldier {
 	
 	private static RobotController rc;
 	
-	
-	
 	// Soldier will flee if infected and has less life than 
 	// INFECTED_THRESHOLD times its total life.
 	private static final double INFECTED_THRESHOLD = 0.5;
@@ -37,18 +35,10 @@ public class Soldier {
 	}
 	
 	
-	
-	
 	private static void repeat() throws GameActionException {
-
 		fight();
-
 	}
 
-
-		
-		
-//		
 //		int mySensorRadius = rc.getType().sensorRadiusSquared;
 //		int myAttackRadius = rc.getType().attackRadiusSquared;
 //		RobotInfo[] enemyRobots = rc.senseHostileRobots( rc.getLocation(), -1 );
@@ -97,6 +87,7 @@ public class Soldier {
 	}
 	
 	private static void fight() throws GameActionException {
+		RobotInfo[] robots = rc.senseNearbyRobots();
 		RobotInfo[] enemies = rc.senseHostileRobots( rc.getLocation() , rc.getType().sensorRadiusSquared ) ;
 		Direction dir;
 		
@@ -123,9 +114,12 @@ public class Soldier {
 					// Move defensively otherwise, in the direction opposite to that 
 					// pointing to the nearest enemy.
 					if ( allies.length >= enemies.length ){
-						MapLocation sweetSpot = findSweetSpot( findWeakest( enemies ) );
-						dir = rc.getLocation().directionTo( sweetSpot );
-						Movement.simpleMove( dir );
+						MapLocation sweetSpot = findSweetSpot( findWeakest( enemies ), rc.senseNearbyRobots() );
+						MapLocation nextLocation = Movement.findPath( rc.getLocation(), sweetSpot, Movement.blockedLocations( robots  ) ).getFirst();
+						if( nextLocation!=null ) {
+							dir = rc.getLocation().directionTo( nextLocation );
+							Movement.simpleMove( dir );
+						}
 						rc.setIndicatorString(0, "We have the advantage. Moving accordingly.");
 					} else {
 						dir = getOpposite (rc.getLocation().directionTo( findClosest( enemies).location ) );
@@ -189,7 +183,9 @@ public class Soldier {
 	// for a place that is as far away from enemy as possible.
 	// Given the choice of two map locations that are the same distance
 	// away from the enemy, we elect the one that is closest to us.
-	private static MapLocation findSweetSpot ( RobotInfo enemy ) {
+	// The map locations of nearby robots are not eligible to be the
+	// sweet spot.
+	private static MapLocation findSweetSpot ( RobotInfo enemy, RobotInfo[] nearbyRobots ) {
 
 		int myAttackRadiusSquared = rc.getType().attackRadiusSquared;
 		int myAttackRadius = 0;
@@ -212,7 +208,7 @@ public class Soldier {
 				here = enemy.location.add(i,j);
 				hereToEnemySquared = i*i + j*j;
 
-				if ( hereToEnemySquared <= myAttackRadiusSquared ){
+				if ( hereToEnemySquared <= myAttackRadiusSquared && !isAtThisLocation( nearbyRobots, here ) ){
 					// Begin code iterated in a disk around the enemy
 					if (hereToEnemySquared > enemy.location.distanceSquaredTo( sweetSpot ) ){
 						sweetSpot = here;
@@ -228,6 +224,19 @@ public class Soldier {
 			}
 		}
 		return sweetSpot;
+	}
+	
+	private static boolean isAtThisLocation( RobotInfo[] robots, MapLocation location ){
+		if ( robots.length == 0 || location == null ) {
+			return false;
+		} else {
+			for ( int i=0; i<robots.length; i++ ){
+				if ( robots[i].location == location ) {
+					return true;
+				}
+			}
+			return false;
+		}
 	}
 	
 }
