@@ -1,21 +1,21 @@
 package artanis;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
 
 import battlecode.common.*;
 
 public class Soldier {
 	
 	private static RobotController rc;
-	private static Signal[] signalQueue;
-	private static Direction myDirection;
-	private static RobotInfo targetRobot;
+	
+	
+	
+	// Soldier will flee if infected and has less life than 
+	// INFECTED_THRESHOLD times its total life.
+	private static final double INFECTED_THRESHOLD = 0.5;
 	
 	public static void code( ){
 		rc = RobotPlayer.rc;		
-		myDirection = Movement.randomDirection();
 		
 		try {
 			runsOnce();
@@ -36,26 +36,16 @@ public class Soldier {
 		return;
 	}
 	
-	// I am having trouble extracting enemies in range from all enemies sensed.
-	// This should be easy.
+	
+	
+	
 	private static void repeat() throws GameActionException {
-		//TODO INCORPORATE THIS INTO THE COMMENTED CODE BELOW
-		RobotInfo[] enemyRobots = rc.senseHostileRobots( rc.getLocation(), -1 );
-		
-		if ( enemyRobots.length > 0 ){
-			rc.setIndicatorString(0, "I see the enemy");
-			targetRobot = findWeakestEnemy( enemyRobots );
-			if ( rc.isWeaponReady() && rc.canAttackLocation( targetRobot.location )){
-				rc.attackLocation( targetRobot.location );
-			} else if ( rc.isCoreReady() ) {
-				repositionAround( targetRobot );
-			}
-		} else {
-			rc.setIndicatorString(0, "No enemy.");
-			if ( targetRobot != null && rc.isCoreReady() ) {
-				Movement.simpleMove( rc.getLocation().directionTo( targetRobot.location ) );
-			}
-		}
+
+		fight();
+
+	}
+
+
 		
 		
 //		
@@ -96,81 +86,148 @@ public class Soldier {
 //				}
 //			} 
 //		}
-	}
 	
-	private static void repositionAround ( RobotInfo enemy ) throws GameActionException {
-		
-		int radiusSquared = rc.getType().attackRadiusSquared, radius = 0 ;
-		int iSquared, jSquared;
-		int fromMeToSweetSpot = 0;
-		MapLocation sweetSpot = rc.getLocation();
-		MapLocation thisLocation;
-		
-		if ( rc.getLocation().distanceSquaredTo( enemy.location ) > radiusSquared ) {
-			Movement.simpleMove( rc.getLocation().directionTo( enemy.location ) );
+	private static void attackMove( Direction dir ) throws GameActionException {
+		RobotInfo[] enemies = rc.senseHostileRobots( rc.getLocation() , rc.getType().sensorRadiusSquared ); 
+		if ( enemies.length > 0 ) {
+			fight();
 		} else {
-			
-			while ( radius*radius < radiusSquared )
-				radius++;
-			
-			for ( int i=-radius; i<=radius; i++ ){
-				iSquared = i*i;
-				for ( int j=-radius; j<=radius; j++ ){
-					jSquared = j*j;
-					if (iSquared + jSquared <= radiusSquared ){
-						// Begin code to be iterated in a disk around the enemy
-
-						// Here we find a 'sweet spot' from which to attack the enemy.
-						// We search in the disk of radius rc.getType().attackRadiusSquared
-						// for a place that is as far away from enemy as possible.
-						// Between two map location which are the same distance
-						// from the enemy, we choose the one that is closest to us.
-
-						thisLocation = enemy.location.add(i, j);
-						if (iSquared + jSquared > enemy.location.distanceSquaredTo( sweetSpot ) ){
-							sweetSpot = thisLocation;
-							fromMeToSweetSpot = rc.getLocation().distanceSquaredTo( sweetSpot );
-						} else if ( iSquared + jSquared == enemy.location.distanceSquaredTo( sweetSpot ) ) {
-							if ( fromMeToSweetSpot > rc.getLocation().distanceSquaredTo( thisLocation ) ) {
-								sweetSpot = thisLocation;
-								fromMeToSweetSpot = rc.getLocation().distanceSquaredTo( thisLocation );
-							}
-						}
-						// End code to be iterated in a disk around the enemy
-					}
-				}
-			}
-			
-			
+			Movement.simpleMove( dir );
 		}
-		
-		Direction dir = rc.getLocation().directionTo( sweetSpot );
-		Movement.simpleMove( dir );
 	}
 	
-	public static RobotInfo findWeakestEnemy( RobotInfo[] enemyRobots ) {
-		int numberOfEnemies = enemyRobots.length;
+	private static void fight() throws GameActionException {
+		RobotInfo[] enemies = rc.senseHostileRobots( rc.getLocation() , rc.getType().sensorRadiusSquared ) ;
+		Direction dir;
 		
-		if( numberOfEnemies > 0 ){
-			int i, weakestIndex = 0;
-			double weakness = 0, largestWeakness;
-	
-			largestWeakness = enemyRobots[0].maxHealth - enemyRobots[0].health;
-	
-			for(i=1; i<numberOfEnemies; i++) {
-				weakness = enemyRobots[i].maxHealth - enemyRobots[i].health;
+		if ( enemies.length > 0 ) {
+			// If there are enemies nearby and the soldier is infected and with
+			// less than 50% life, simpleMove in the direction opposite to that
+			// pointing to the nearest enemy.
+			if ( rc.getInfectedTurns() > 0 && rc.getHealth() < INFECTED_THRESHOLD * rc.getType().maxHealth ) {
+				dir = getOpposite( rc.getLocation().directionTo( findClosest( enemies ).location ) );
+				Movement.simpleMove( dir );
+				rc.setIndicatorString(0, "Fleeing because of infection.");
+			} else {
+				RobotInfo[] enemiesInRange = rc.senseHostileRobots( rc.getLocation() , rc.getType().attackRadiusSquared );
+				// If there are enemies in range and the weapon is ready, shoot the weakest one in range.
+				// Try to move otherwise.
+				if ( rc.isWeaponReady() && enemiesInRange.length > 0 ) {
+					rc.attackLocation( findWeakest( enemiesInRange ).location );
+					rc.setIndicatorString(0, "Attacking nearest enemy.");
+				} else {
+					
+					RobotInfo[] allies = rc.senseNearbyRobots( rc.getType().sensorRadiusSquared, rc.getTeam() );
+					// If there are at least as many allies as enemies nearby, move offensively,
+					// to a 'sweet spot' that is a good place to attack the weakest enemy nearby.
+					// Move defensively otherwise, in the direction opposite to that 
+					// pointing to the nearest enemy.
+					if ( allies.length >= enemies.length ){
+						MapLocation sweetSpot = findSweetSpot( findWeakest( enemies ) );
+						dir = rc.getLocation().directionTo( sweetSpot );
+						Movement.simpleMove( dir );
+						rc.setIndicatorString(0, "We have the advantage. Moving accordingly.");
+					} else {
+						dir = getOpposite (rc.getLocation().directionTo( findClosest( enemies).location ) );
+						Movement.simpleMove( dir );
+						rc.setIndicatorString(0, "We are in disadvantage. Moving accordingly.");
+					}	
+					
+				}	
+			}
+		}
+	}
+
+	private static Direction getOpposite( Direction dir ){
+		for( int i=1; i<= 4; i++ )
+			dir.rotateRight();
+		return dir;
+	}
+
+	private static RobotInfo findWeakest( RobotInfo[] robots ) {
+		if( robots.length > 0 ){
+			int weakestIndex = 0;
+			double largestWeakness = robots[ weakestIndex ].maxHealth - robots[ weakestIndex ].health;
+
+			double weakness;
+
+			for(int i=1; i<robots.length; i++) {
+				weakness = robots[i].maxHealth - robots[i].health;
 				if ( weakness > largestWeakness ){
 					weakestIndex = i;
 					largestWeakness = weakness;
 				}
 			}
-			
-			return enemyRobots[weakestIndex];
-			
+			return robots[weakestIndex];
 		} else {
 			return null;
 		}
 	}
-	
+
+	private static RobotInfo findClosest( RobotInfo[] robots ) {
+		if( robots.length > 0 ){
+			int closestIndex = 0;
+			double smallestDistanceSquared = rc.getLocation().distanceSquaredTo( robots[ closestIndex ].location );
+
+			double distanceSquared;
+
+			for(int i=1; i<robots.length; i++) {
+				distanceSquared = robots[i].maxHealth - robots[i].health;
+				if ( distanceSquared < smallestDistanceSquared ){
+					closestIndex = i;
+					smallestDistanceSquared = distanceSquared;
+				}
+			}
+			return robots[ closestIndex ];
+		} else {
+			return null;
+		}
+	}
+
+	// Here we find a 'sweet spot' from which to attack an enemy.
+	// We search in the disk of radius rc.getType().attackRadiusSquared
+	// for a place that is as far away from enemy as possible.
+	// Given the choice of two map locations that are the same distance
+	// away from the enemy, we elect the one that is closest to us.
+	private static MapLocation findSweetSpot ( RobotInfo enemy ) {
+
+		int myAttackRadiusSquared = rc.getType().attackRadiusSquared;
+		int myAttackRadius = 0;
+
+		myAttackRadius = 0;
+		while ( myAttackRadius*myAttackRadius < myAttackRadiusSquared )
+			myAttackRadius++;
+		if ( myAttackRadius*myAttackRadius > myAttackRadiusSquared )
+			myAttackRadius--;
+
+		MapLocation sweetSpot = rc.getLocation();
+		int fromMeToSweetSpot = 0;
+
+		MapLocation here;
+		int hereToEnemySquared; 
+
+		for ( int i=-myAttackRadius; i<=myAttackRadius; i++ ){
+			for ( int j=-myAttackRadius; j<=myAttackRadius; j++ ){
+				
+				here = enemy.location.add(i,j);
+				hereToEnemySquared = i*i + j*j;
+
+				if ( hereToEnemySquared <= myAttackRadiusSquared ){
+					// Begin code iterated in a disk around the enemy
+					if (hereToEnemySquared > enemy.location.distanceSquaredTo( sweetSpot ) ){
+						sweetSpot = here;
+						fromMeToSweetSpot = rc.getLocation().distanceSquaredTo( sweetSpot );
+					} else if ( hereToEnemySquared == enemy.location.distanceSquaredTo( sweetSpot ) ) {
+						if ( fromMeToSweetSpot > rc.getLocation().distanceSquaredTo( here ) ) {
+							sweetSpot = here;
+							fromMeToSweetSpot = rc.getLocation().distanceSquaredTo( sweetSpot );
+						}
+					}
+					// End code iterated in a disk around the enemy
+				}
+			}
+		}
+		return sweetSpot;
+	}
 	
 }
