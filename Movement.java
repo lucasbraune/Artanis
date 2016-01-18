@@ -30,7 +30,7 @@ public class Movement {
 		Direction candidateDirection = dir;
 		boolean coreReady;
 		
-		if ( dir == null ) 
+		if ( dir == null || dir == Direction.NONE || dir == Direction.OMNI ) 
 			return;
 		
 		coreReady = rc.isCoreReady();
@@ -53,6 +53,7 @@ public class Movement {
 					break;
 				} else {
 					decreasePatience();
+					rc.setIndicatorString(1, "Had to change directions.");
 				}
 				
 			}
@@ -90,8 +91,9 @@ public class Movement {
 					rc.move(candidateDirection);
 					coreReady = false;
 					break;
-				} 
+				}
 			}
+			
 			// If scout hasn't moved, it is possibly because it was afraid of enemies.
 			// Now it will become brave and try to move again.
 			if ( coreReady ) {
@@ -106,7 +108,7 @@ public class Movement {
 					} 
 				}
 			}
-			
+
 		}
 	}
 	
@@ -166,68 +168,75 @@ public class Movement {
 		}
 	}
 	
-	// TODO Implement rubble.
-	public static ArrayList<MapLocation> blockedLocations( RobotInfo[] robots ){
-		ArrayList<MapLocation> blocked = new ArrayList<MapLocation>();
-		for( int i=0; i<robots.length; i++ ){
-			blocked.add( robots[i].location );
-		}
-		return blocked;
-	}
-	
-	// Implementation taken from:
-	// http://www.redblobgames.com/pathfinding/a-star/introduction.html
-	// This method returns a linked list whose first element is the location of the first
-	// step one has to take to go from given start location to the given finish location.
-	public static LinkedList<MapLocation> findPath( MapLocation start, MapLocation finish,
-			ArrayList<MapLocation> blockedLocations ) throws GameActionException {
-		
-		LinkedList<MapLocation> frontier = new LinkedList<MapLocation>();
-		// A key in the hash table visitedLocations is a location already visited by
-		// the algorithm. The value of a given key is the neighbor from which
-		// the algorithm reached the given key.
-		Hashtable<MapLocation, MapLocation> pastLocations = new Hashtable<MapLocation, MapLocation>();
-		
-		frontier.add( start );
-		pastLocations.put( start, null );
-		
-		while( !frontier.isEmpty() ){			
-			MapLocation current = frontier.removeFirst();
-			
-			if ( current == finish )
-				break;
-			
-			ArrayList<MapLocation> freeNeighbors = freeNeighbors( current, blockedLocations );
-
-			for ( MapLocation next : freeNeighbors ) {
-				if ( !pastLocations.containsKey( next ) ){
-					frontier.add( next );
-					pastLocations.put( next, current );
-				}
-			}
-		}
-
-		LinkedList<MapLocation> path = new LinkedList<MapLocation>();
-		MapLocation beforeThat = finish;
-		
-		while( beforeThat != start ) {
-			path.addFirst( pastLocations.get( beforeThat ) );
-			beforeThat = pastLocations.get( beforeThat );
-		}
-		path.removeFirst();
-		return path;
-	}
-
-	public static ArrayList<MapLocation> freeNeighbors( MapLocation center, ArrayList<MapLocation> blockedLocations ) throws GameActionException{
-		MapLocation here;
-		ArrayList<MapLocation> freeTiles = new ArrayList<MapLocation>();
-		
-		for( int i=0; i<=7; i++ ){
-			here = center.add( Direction.values()[i] );
-			if ( !blockedLocations.contains( here ) )
-				freeTiles.add( here );
-		}
-		return freeTiles;
-	}
+//	// TODO Implement rubble.
+//	public static ArrayList<MapLocation> blockedLocations( RobotInfo[] robots ){
+//		ArrayList<MapLocation> blocked = new ArrayList<MapLocation>();
+//		for( int i=0; i<robots.length; i++ ){
+//			blocked.add( robots[i].location );
+//		}
+//		return blocked;
+//	}
+//	
+//	// Implementation taken from:
+//	// http://www.redblobgames.com/pathfinding/a-star/introduction.html
+//	// This method returns a linked list whose first element is the location of the first
+//	// step one has to take to go from given start location to the given finish location.
+//	public static LinkedList<MapLocation> findPath( MapLocation start, MapLocation finish,
+//			ArrayList<MapLocation> blockedLocations ) throws GameActionException {
+//		
+//		LinkedList<MapLocation> frontier = new LinkedList<MapLocation>();
+//		// A key in the hash table visitedLocations is a location already visited by
+//		// the algorithm. The value of a given key is the neighbor from which
+//		// the algorithm reached the given key.
+//		HashMap<MapLocation, MapLocation> pastLocations = new HashMap<MapLocation, MapLocation>();
+//		
+//		frontier.add( start );
+//		pastLocations.put( start, null );
+//		
+//		while( !frontier.isEmpty() ){			
+//			MapLocation current = frontier.removeFirst();
+//			
+//			if ( current == finish )
+//				break;
+//			
+//			ArrayList<MapLocation> freeNeighbors = freeNeighbors( current, blockedLocations );
+//
+//			for ( MapLocation next : freeNeighbors ) {
+//				if ( !pastLocations.containsKey( next ) ){
+//					frontier.add( next );
+//					pastLocations.put( next, current );
+//				}
+//			}
+//		}
+//
+//		LinkedList<MapLocation> path = new LinkedList<MapLocation>();
+//		MapLocation beforeThat = finish;
+//		
+//		while( beforeThat != start ) {
+//			path.addFirst( pastLocations.get( beforeThat ) );
+//			beforeThat = pastLocations.get( beforeThat );
+//		}
+//		if( path.size()>1 ){
+//			path.removeFirst();
+//		} else if ( path.isEmpty() ){
+//			path.add( start );
+//		}
+//			
+//		return path;
+//	}
+//
+//	public static ArrayList<MapLocation> freeNeighbors( MapLocation center,
+//			ArrayList<MapLocation> blockedLocations ) throws GameActionException{
+//		
+//		MapLocation here;
+//		ArrayList<MapLocation> freeTiles = new ArrayList<MapLocation>();
+//		
+//		for( int i=0; i<=7; i++ ){
+//			here = center.add( Direction.values()[i] );
+//			if ( !blockedLocations.contains( here ) && rc.canSense( here ) )
+//				freeTiles.add( here );
+//		}
+//		return freeTiles;
+//	}
 	
 }
