@@ -1,14 +1,26 @@
 package artanis;
 
+import java.util.*;
 import battlecode.common.*;
 
 public class Soldier {
 	
 	private static RobotController rc;
+
+	private static RobotInfo[] enemies;
+	private static RobotInfo[] allies;
+	private static RobotInfo[] enemiesInRange;
+	
+	private static Signal[] incomingSignals;
+	
+	private static Queue<MapLocation> soldiersInDanger = new LinkedList<MapLocation>();
 	
 	// Soldier will flee if infected and has less life than 
 	// INFECTED_THRESHOLD times its total life.
 	private static final double INFECTED_THRESHOLD = 0.5;
+	// Broadcast radius
+	private static final int SMALL_RADIUS = 225;
+	
 	
 	public static void code( ){
 		rc = RobotPlayer.rc;		
@@ -34,7 +46,27 @@ public class Soldier {
 	
 	
 	private static void repeat() throws GameActionException {
-		fight();
+		
+		// TODO: Extract everything from senseNearbyRobots();
+		enemies = rc.senseHostileRobots( rc.getLocation() , rc.getType().sensorRadiusSquared ) ;
+		allies = rc.senseNearbyRobots( rc.getType().sensorRadiusSquared, rc.getTeam() );
+		enemiesInRange = rc.senseHostileRobots( rc.getLocation() , rc.getType().attackRadiusSquared );
+		
+		incomingSignals = rc.emptySignalQueue();
+		updateSoldiersInDanger( incomingSignals );
+		
+		if ( enemies.length > 0 ) {
+			fight();
+			return;
+		}
+		
+		if ( !soldiersInDanger.isEmpty() ) {
+			attackMove( rc.getLocation().directionTo( soldiersInDanger.element() ) );
+			rc.setIndicatorString(2, "A soldier is in peril!");
+		} else {
+			rc.setIndicatorString(2, "Nearby soldiers seem to be safe.");
+		}
+		
 	}
 
 //		int mySensorRadius = rc.getType().sensorRadiusSquared;
@@ -75,20 +107,42 @@ public class Soldier {
 //			} 
 //		}
 	
-//	private static void attackMove( Direction dir, RobotInfo[] enemies ) throws GameActionException { 
-//		if ( enemies.length > 0 ) {
-//			fight();
-//		} else {
-//			Movement.simpleMove( dir );
-//		}
-//	}
+	private static void updateSoldiersInDanger(Signal[] signals ) {
+		
+		// If I am in attacking range of the distress signal of a soldier
+		// and there are no enemy soldiers nearby, dismiss the distress
+		// signal.
+		
+		if ( enemies.length == 0 ) {
+			for( MapLocation soldier : soldiersInDanger ){
+				if ( rc.canSenseLocation( soldier ) ) {
+					soldiersInDanger.remove( soldier );
+				}
+			}
+		}
+		
+		// Any signal without a message is interpreted as a distress signal from
+		// a soldier.
+		
+		for ( int i=0; i<signals.length; i++ ) {
+			if ( signals[i].getMessage() == null ) {
+				soldiersInDanger.add( signals[i].getLocation() );
+			}
+		}
+		
+	}
+
+	private static void attackMove( Direction dir ) throws GameActionException { 
+		if ( enemies.length > 0 ) {
+			fight();
+		} else {
+			Movement.simpleMove( dir );
+		}
+	}
+	
+	
 	
 	private static void fight() throws GameActionException {
-		// In principle I should extract everything from senseNearbyRobots();
-		// RobotInfo[] robots = rc.senseNearbyRobots();
-		RobotInfo[] enemies = rc.senseHostileRobots( rc.getLocation() , rc.getType().sensorRadiusSquared ) ;
-		RobotInfo[] allies = rc.senseNearbyRobots( rc.getType().sensorRadiusSquared, rc.getTeam() );
-		RobotInfo[] enemiesInRange = rc.senseHostileRobots( rc.getLocation() , rc.getType().attackRadiusSquared );
 		
 		if ( enemies.length > 0 ) {
 			
@@ -121,6 +175,7 @@ public class Soldier {
 						rc.setIndicatorString(0, "Cannot attack. Moving to sweetspot.");
 					} else {
 						moveDefensively( findClosest( enemies ) );
+						callForHelp();
 						rc.setIndicatorString(0, "Cannot attack. Fleeing from enemy.");
 					}	
 				} else {
@@ -128,6 +183,13 @@ public class Soldier {
 				}
 			}
 		}
+	}
+
+	// Any signal without a message is interpreted as a distress signal from
+	// a soldier.
+	
+	private static void callForHelp() throws GameActionException {
+		rc.broadcastSignal( SMALL_RADIUS );
 	}
 
 	private static void moveOffensively(RobotInfo enemy ) throws GameActionException {
@@ -175,12 +237,6 @@ public class Soldier {
 			rc.move( bestDirection );
 		}
 	}
-
-//	private static Direction getOpposite( Direction dir ){
-//		for( int i=1; i<= 4; i++ )
-//			dir.rotateRight();
-//		return dir;
-//	}
 
 	private static RobotInfo findWeakest( RobotInfo[] robots ) {
 		if( robots.length > 0 ){
