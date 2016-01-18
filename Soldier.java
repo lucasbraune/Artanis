@@ -11,15 +11,22 @@ public class Soldier {
 	private static RobotInfo[] allies;
 	private static RobotInfo[] enemiesInRange;
 	
-	private static Signal[] incomingSignals;
+	private static LinkedList<Signal> incomingSignals = new LinkedList<Signal>();
+	private static LinkedList<Signal> archonsInDanger = new LinkedList<Signal>();
+	private static LinkedList<Signal> soldiersInDanger = new LinkedList<Signal>();
+	private static LinkedList<MapLocation> zombieDens = new LinkedList<MapLocation>();
+	private static LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
+	private static LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
 	
-	private static Queue<MapLocation> soldiersInDanger = new LinkedList<MapLocation>();
+	private static boolean sentASignalThisTurn = false;
 	
 	// Soldier will flee if infected and has less life than 
 	// INFECTED_THRESHOLD times its total life.
 	private static final double INFECTED_THRESHOLD = 0.5;
-	// Broadcast radius
+	
+	// Broadcast radius for distress signals
 	private static final int SMALL_RADIUS = 225;
+	private static final int MEDIUM_RADIUS = 625;
 	
 	
 	public static void code( ){
@@ -46,90 +53,218 @@ public class Soldier {
 	
 	
 	private static void repeat() throws GameActionException {
-		
-		// TODO: Extract everything from senseNearbyRobots();
-		enemies = rc.senseHostileRobots( rc.getLocation() , rc.getType().sensorRadiusSquared ) ;
-		allies = rc.senseNearbyRobots( rc.getType().sensorRadiusSquared, rc.getTeam() );
-		enemiesInRange = rc.senseHostileRobots( rc.getLocation() , rc.getType().attackRadiusSquared );
-		
-		incomingSignals = rc.emptySignalQueue();
-		updateSoldiersInDanger( incomingSignals );
+	
+		// Think before changing the order in which these methods are executed.
+		updateNearbyRobots();
+		updateIncomingSignals();
+		sentASignalThisTurn = false;
+		updateTasks();
+		checkForDens();
+//		checkForParts();
+//		checkForNeutrals();
 		
 		if ( enemies.length > 0 ) {
 			fight();
 			return;
 		}
 		
+		// TODO Go to nearest soldier instead
+		
 		if ( !soldiersInDanger.isEmpty() ) {
-			attackMove( rc.getLocation().directionTo( soldiersInDanger.element() ) );
+			attackMove( rc.getLocation().directionTo( soldiersInDanger.element().getLocation() ) );
 			rc.setIndicatorString(2, "A soldier is in peril!");
-		} else {
-			rc.setIndicatorString(2, "Nearby soldiers seem to be safe.");
+			return;
+		} 
+		
+		if ( !zombieDens.isEmpty() ) {
+			attackMove( rc.getLocation().directionTo( zombieDens.element() ) );
+			rc.setIndicatorString(2, "Let's kill a Zombie Den!");
+			return;
+		} 
+
+		rc.setIndicatorString(2, "Nothing to do..." );
+
+	}
+
+	private static void checkForNeutrals() throws GameActionException {
+
+		RobotInfo[] neutrals = rc.senseNearbyRobots(-1, Team.NEUTRAL);
+
+		if ( neutrals.length > 0 ) {
+			RobotInfo neutral = enemies[0];
+
+			// Check if these neutrals were already accounted for
+			boolean oldNeutral = false;
+
+			Iterator<MapLocation> iterator = neutralRobots.iterator();
+			while( iterator.hasNext() ){
+				if( rc.canSenseLocation( iterator.next() ) ) {
+					oldNeutral = true;
+					break;
+				}
+			}
+
+			// If not, warn other units by broadcasting four signals.
+			if( !oldNeutral ){
+				neutralRobots.add( neutral.location );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+			}
+		}
+	}
+
+	private static void checkForParts() throws GameActionException {
+
+		// Check if you already know that there are parts near here
+		
+		boolean knownPartsLocation = false;
+
+		Iterator<MapLocation> iterator = parts.iterator();
+		while( iterator.hasNext() ){
+			if( rc.canSenseLocation( iterator.next() ) ) {
+				knownPartsLocation = true;
+				break;
+			}
+		}
+
+		// If not, and if there are parts nearby, let other people know
+		// by broadcasting three signals and take note yourself
+		// of this location yourself.
+		
+		if( !knownPartsLocation && rc.sensePartLocations(-1).length > 0 ) {
+			parts.add( rc.getLocation() );
+			rc.broadcastSignal( MEDIUM_RADIUS );
+			rc.broadcastSignal( MEDIUM_RADIUS );
+			rc.broadcastSignal( MEDIUM_RADIUS );
+		}
+	}
+
+	private static void updateNearbyRobots() {
+		// TODO: Extract everything from senseNearbyRobots();
+		enemies = rc.senseHostileRobots( rc.getLocation() , rc.getType().sensorRadiusSquared ) ;
+		allies = rc.senseNearbyRobots( rc.getType().sensorRadiusSquared, rc.getTeam() );
+		enemiesInRange = rc.senseHostileRobots( rc.getLocation() , rc.getType().attackRadiusSquared );
+	}
+
+	private static void checkForDens() throws GameActionException {
+
+		for( int i=0; i<enemies.length; i++ ){
+			if ( enemies[i].type == RobotType.ZOMBIEDEN ) {
+				
+				// Begin code that is run near a zombie den
+				RobotInfo den = enemies[i];
+				
+				// Check if this den was already accounted for
+				boolean oldDen = false;
+				
+				Iterator<MapLocation> iterator = zombieDens.iterator();
+				while( iterator.hasNext() ){
+					if( rc.canSenseLocation( iterator.next() ) ) {
+						oldDen = true;
+						break;
+					}
+				}
+				
+				// If not, warn other units by broadcasting two signals.
+				if( !oldDen ){
+					zombieDens.add( den.location );
+					rc.broadcastSignal( MEDIUM_RADIUS );
+					rc.broadcastSignal( MEDIUM_RADIUS );
+				}
+				// End of code that is run near a zombie den
+				
+			}
 		}
 		
 	}
-
-//		int mySensorRadius = rc.getType().sensorRadiusSquared;
-//		int myAttackRadius = rc.getType().attackRadiusSquared;
-//		RobotInfo[] enemyRobots = rc.senseHostileRobots( rc.getLocation(), -1 );
-//		RobotInfo[] enemiesInRange = rc.senseHostileRobots( rc.getLocation(), myAttackRadius );
-//		//RobotInfo[] enemiesInRange = getEnemiesInRange( enemyRobots );
-//		MapLocation weakest, target;
-//		
-//		signalQueue = rc.emptySignalQueue();
-//		target = Communication.getLocation( signalQueue, Archon.TARGET_LOCATION );
-//		
-//		if( target != null ) {
-//			if( enemyRobots.length>0 && 
-//					rc.getLocation().distanceSquaredTo( target ) <= 2*mySensorRadius ){
-//				if( enemiesInRange.length > 0 && rc.isWeaponReady() ){
-//					weakest = Attack.findWeakestEnemy( enemiesInRange );
-//					rc.attackLocation( weakest );
-//				} else {
-//					weakest = Attack.findWeakestEnemy( enemyRobots );
-//					myDirection = rc.getLocation().directionTo( weakest );
-//					Movement.simpleMove( myDirection );
-//				}
-//			} else {
-//				myDirection = rc.getLocation().directionTo( target );
-//				Movement.simpleMove( myDirection );
-//			}
-//		} else {
-//			if( enemyRobots.length>0 ){
-//				if( enemiesInRange.length > 0 && rc.isWeaponReady() ){
-//					weakest = Attack.findWeakestEnemy( enemiesInRange );
-//					rc.attackLocation( weakest );
-//				} else {
-//					weakest = Attack.findWeakestEnemy( enemyRobots );
-//					myDirection = rc.getLocation().directionTo( weakest );
-//					Movement.simpleMove( myDirection );
-//				}
-//			} 
-//		}
 	
-	private static void updateSoldiersInDanger(Signal[] signals ) {
+	private static void updateIncomingSignals() {
+		
+		Signal[] signals = rc.emptySignalQueue();
+		incomingSignals.clear();
+		
+		for( int i=0; i<signals.length; i++ ) {
+			incomingSignals.add( signals[i] );
+		}
+	}
+
+	private static void checkForCompletedTasks( ) {
 		
 		// If I am in attacking range of the distress signal of a soldier
 		// and there are no enemy soldiers nearby, dismiss the distress
 		// signal.
-		
+
 		if ( enemies.length == 0 ) {
-			for( MapLocation soldier : soldiersInDanger ){
-				if ( rc.canSenseLocation( soldier ) ) {
-					soldiersInDanger.remove( soldier );
+			
+			Iterator<Signal> iterator = soldiersInDanger.iterator();
+			while( iterator.hasNext() ){
+				if( rc.canSenseLocation( iterator.next().getLocation() ) ) {
+					iterator.remove();
 				}
 			}
+
+			Iterator<MapLocation> iterator2 = zombieDens.iterator();
+			while( iterator2.hasNext() ){
+				if( rc.canSenseLocation( iterator2.next() ) ) {
+					iterator.remove();
+				}
+			}
+			
 		}
-		
-		// Any signal without a message is interpreted as a distress signal from
-		// a soldier.
-		
-		for ( int i=0; i<signals.length; i++ ) {
-			if ( signals[i].getMessage() == null ) {
-				soldiersInDanger.add( signals[i].getLocation() );
+	}
+
+	private static void updateTasks() {
+		// If beep has no message, it is a signal from a soldier.
+
+		LinkedList<Signal> fromSoldiers = new LinkedList<Signal>();
+
+		for ( Signal beep : incomingSignals ) {
+			if ( beep.getMessage() == null ) {
+				fromSoldiers.add( beep );
 			}
 		}
-		
+
+		// If that soldier sent only one signal this (last?) turn, it is
+		// calling for help. Note that removing an element from a
+		// LinkedList return false if the list does not contain the element.
+
+		for ( Signal beep : fromSoldiers ) {
+
+			int count = 0;
+			for ( Signal bop : fromSoldiers ) {
+				if ( bop == beep ) {
+					count++;
+				}
+			}
+
+			switch ( count ) {
+			
+			case 1:
+				Iterator<Signal> iterator = soldiersInDanger.iterator();
+				while( iterator.hasNext() ){
+					if( iterator.next().getID() == beep.getID() ) {
+						iterator.remove();
+					}
+				}
+				soldiersInDanger.add( beep );
+				break;
+
+			case 2:
+				Iterator<MapLocation> iterator2 = zombieDens.iterator();
+				while( iterator2.hasNext() ){
+					if( iterator2.next().distanceSquaredTo( beep.getLocation() ) < rc.getType().attackRadiusSquared ) {
+						iterator2.remove();
+					}
+				}
+				zombieDens.add( beep.getLocation() );
+				break;
+				
+			}
+			
+			checkForCompletedTasks();
+		}
 	}
 
 	private static void attackMove( Direction dir ) throws GameActionException { 
@@ -139,8 +274,6 @@ public class Soldier {
 			Movement.simpleMove( dir );
 		}
 	}
-	
-	
 	
 	private static void fight() throws GameActionException {
 		
@@ -185,11 +318,13 @@ public class Soldier {
 		}
 	}
 
-	// Any signal without a message is interpreted as a distress signal from
+	// A single signal without a message is interpreted as a distress signal from
 	// a soldier.
 	
 	private static void callForHelp() throws GameActionException {
-		rc.broadcastSignal( SMALL_RADIUS );
+		if( !sentASignalThisTurn ){
+			rc.broadcastSignal( SMALL_RADIUS );
+		}
 	}
 
 	private static void moveOffensively(RobotInfo enemy ) throws GameActionException {
@@ -238,6 +373,10 @@ public class Soldier {
 		}
 	}
 
+	// The findWeakest method does what its name says, except
+	// that it will only return a Zombie Den only if there are
+	// no enemy units of other types around.
+	
 	private static RobotInfo findWeakest( RobotInfo[] robots ) {
 		if( robots.length > 0 ){
 			int weakestIndex = 0;
@@ -247,7 +386,7 @@ public class Soldier {
 
 			for(int i=1; i<robots.length; i++) {
 				weakness = robots[i].maxHealth - robots[i].health;
-				if ( weakness > largestWeakness ){
+				if ( weakness > largestWeakness || robots[weakestIndex].type == RobotType.ZOMBIEDEN ){
 					weakestIndex = i;
 					largestWeakness = weakness;
 				}

@@ -15,11 +15,19 @@ public class Archon {
 	// Normal archon variables
 	private static RobotType typeToBeBuilt = RobotType.SOLDIER;
 	
-	// Archon messages start at 1000. Public so that other units can read.
+	// Archon messages start at 1000. Public so other units can read.
 	public static final int I_AM_THE_MASTER = 1000;
 	public static final int TARGET_LOCATION = 1001;
 	public static final int BUILD_TYPE = 1002;
 	public static final int WHERE_IS_THE_ENEMY = 1003;
+	
+	public static final int HELP = 1004;
+	public static final int DEN_FOUND = 1005;
+	
+	public static final int PARTS_COLLECTED = 1006;
+	public static final int NEUTRAL_CAPTURED = 1007;
+	public static final int PARTS_FOUND = 1006;
+	public static final int NEUTRAL_FOUND = 1007;
 	
 	public static void code( ){
 		rc = RobotPlayer.rc;
