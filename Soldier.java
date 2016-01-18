@@ -20,6 +20,11 @@ public class Soldier {
 	private static LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
 	private static LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
 	
+	// For scouting
+	private static int timeGoingOneWay = 0;
+	private static Direction scoutingDirection = Direction.NONE;
+	private static final int MAX_TIME_ONE_WAY = 5;
+	
 	private static boolean sentASignalThisTurn = false;
 	
 	// Soldier will flee if infected and has less life than 
@@ -29,6 +34,7 @@ public class Soldier {
 	// Broadcast radius for distress signals
 	private static final int SMALL_RADIUS = 225;
 	private static final int MEDIUM_RADIUS = 625;
+	private static final int LARGE_RADIUS = 900;
 	
 	public static void code( ){
 		rc = RobotPlayer.rc;		
@@ -68,12 +74,16 @@ public class Soldier {
 			rc.setIndicatorString(2, "Fighting right now.");
 			return;
 		}
-
-		// TODO Go to nearest soldier instead
 		
+		if ( !archonsInDanger.isEmpty() ) {
+			attackMove( rc.getLocation().directionTo( soldiersInDanger.element().getLocation() ) );
+			rc.setIndicatorString(2, "A soldier is in peril!");
+			return;
+		} 
+
 		if ( !soldiersInDanger.isEmpty() ) {
 			attackMove( rc.getLocation().directionTo( soldiersInDanger.element().getLocation() ) );
-			rc.setIndicatorString(2, "A soldier is in peril near (" + soldiersInDanger.element().getLocation().x +"," + soldiersInDanger.element().getLocation().y + ").");
+			rc.setIndicatorString(2, "A soldier is in peril!");
 			return;
 		} 
 		
@@ -84,9 +94,24 @@ public class Soldier {
 			return;
 		} else if ( !zombieDens.isEmpty() ) {
 			attackMove( rc.getLocation().directionTo( zombieDens.element() ) );
-			rc.setIndicatorString(2, "I am moving toward a Zombie Den.");
+			rc.setIndicatorString(2, "I am moving towards a Zombie Den.");
 			return;
 		}
+		
+		if ( rc.isCoreReady() ) {
+			if ( timeGoingOneWay < MAX_TIME_ONE_WAY ) {
+				attackMove( scoutingDirection );
+				timeGoingOneWay++;
+				rc.setIndicatorString(2, "I am happily scouting.");
+				return;
+			} else {
+				scoutingDirection = Movement.randomDirection();
+				attackMove( scoutingDirection );
+				timeGoingOneWay = 0;
+				rc.setIndicatorString(2, "I am happily scouting.");
+				return;
+			}
+		} 
 
 		rc.setIndicatorString(2, "Nothing to do..." );
 		return;
@@ -235,10 +260,17 @@ public class Soldier {
 
 		if ( enemies.size() == 0 ) {
 			
-			Iterator<Signal> iterator = soldiersInDanger.iterator();
+			Iterator<Signal> iterator = archonsInDanger.iterator();
 			while( iterator.hasNext() ){
 				if( rc.canAttackLocation( iterator.next().getLocation() ) ) {
 					iterator.remove();
+				}
+			}
+			
+			Iterator<Signal> iterator1 = soldiersInDanger.iterator();
+			while( iterator1.hasNext() ){
+				if( rc.canAttackLocation( iterator1.next().getLocation() ) ) {
+					iterator1.remove();
 				}
 			}
 			
@@ -255,7 +287,9 @@ public class Soldier {
 	}
 
 	private static void updateTasks() {
-		// If beep has no message, it is a signal from a soldier.
+
+		// Start processing signals from soldiers 
+		// If signal has no message, it is a signal from a soldier.
 
 		LinkedList<Signal> fromSoldiers = new LinkedList<Signal>();
 
@@ -298,8 +332,30 @@ public class Soldier {
 				zombieDens.add( beep.getLocation() );
 				break;
 			}
-			
+
 		}
+
+		// Start processing message signals
+
+		for ( Signal ding : incomingSignals ) {
+			if ( ding.getMessage() != null && ding.getMessage().length > 0 ) {
+				int message = ding.getMessage()[0]; 
+				
+				switch ( message ) {
+				case Archon.HELP:
+					Iterator<Signal> iterator3 = archonsInDanger.iterator();
+					while( iterator3.hasNext() ){
+						if( iterator3.next().getID() == ding.getID() ) {
+							iterator3.remove();
+						}
+					}
+					archonsInDanger.add( ding );
+					break;
+				}
+				
+			}
+		}
+
 		checkForCompletedTasks();
 	}
 
@@ -310,9 +366,9 @@ public class Soldier {
 			Movement.simpleMove( dir );
 		}
 	}
-	
+
 	private static void fight() throws GameActionException {
-		
+
 		if ( enemies.size() > 0 ) {
 			
 			// If there are enemies nearby and the soldier is infected and with

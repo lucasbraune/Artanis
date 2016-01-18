@@ -1,37 +1,33 @@
 package artanis;
 
+import java.util.*;
 import battlecode.common.*;
 
 public class Archon {
 	
 	private static RobotController rc;
-	private static Signal[] signalQueue;
-	private static Direction myDirection;
-	private static boolean isMasterArchon = false;
-	private static MapLocation enemyLocation;
-	// The following two are used in method locateEnemy()
-	private static boolean askedScouts = false; 
-	private static int wait=0;
-	// Normal archon variables
-	private static RobotType typeToBeBuilt = RobotType.SOLDIER;
+
+	private static ArrayList<RobotInfo> enemies = new ArrayList<RobotInfo>();
+	private static ArrayList<RobotInfo> allies = new ArrayList<RobotInfo>();
+	private static ArrayList<RobotInfo> enemiesInRange = new ArrayList<RobotInfo>();
+	private static ArrayList<RobotInfo> densNearby = new ArrayList<RobotInfo>();
+	private static ArrayList<RobotInfo> neutralsNearby = new ArrayList<RobotInfo>();
 	
-	// Archon messages start at 1000. Public so other units can read.
-	public static final int I_AM_THE_MASTER = 1000;
-	public static final int TARGET_LOCATION = 1001;
-	public static final int BUILD_TYPE = 1002;
-	public static final int WHERE_IS_THE_ENEMY = 1003;
+	private static LinkedList<Signal> incomingSignals = new LinkedList<Signal>();
+	private static LinkedList<MapLocation> zombieDens = new LinkedList<MapLocation>();
+	private static LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
+	private static LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
 	
-	public static final int HELP = 1004;
-	public static final int DEN_FOUND = 1005;
+	// Broadcast radius for signals
+	private static final int SMALL_RADIUS = 225;
+	private static final int MEDIUM_RADIUS = 625;
+	private static final int LARGE_RADIUS = 900;
 	
-	public static final int PARTS_COLLECTED = 1006;
-	public static final int NEUTRAL_CAPTURED = 1007;
-	public static final int PARTS_FOUND = 1006;
-	public static final int NEUTRAL_FOUND = 1007;
+	// Message meanings
+	public static final int HELP = 1000;
 	
 	public static void code( ){
-		rc = RobotPlayer.rc;
-		myDirection = Movement.randomDirection();
+		rc = RobotPlayer.rc;		
 		
 		try {
 			runsOnce();
@@ -39,9 +35,9 @@ public class Archon {
 			e.printStackTrace();
 		}
 		while(true){
-			try{
+			try {
 				repeat();
-			}catch ( Exception e ) {
+			} catch ( Exception e ) {
 				e.printStackTrace();
 			}
 			Clock.yield();
@@ -49,172 +45,330 @@ public class Archon {
 	}
 	
 	private static void runsOnce() throws GameActionException {
-		electMasterArchon();
+		return;
 	}
 
 	private static void repeat() throws GameActionException {
-		if ( isMasterArchon == true ) {
-			masterArchonCode();
-		} else {
-			normalArchonCode();
-		}
-	}
 
-	private static void normalArchonCode() throws GameActionException {
-		if(rc.isCoreReady()){
-			Direction randomDir = Movement.randomDirection();
-			int typeNumber;
-			MapLocation targetLocation;
-			MapLocation[] partsLocations;
+		// updateNearbyRobots() for archons is different from the
+		// method with the same name that soldiers have. Namely, archons do
+		// not consider the opponent's scouts as enemies (for the purposes
+		// of fleeing).
+		updateNearbyRobots();
+		updateIncomingSignals();
+		
+		//updateTasks();
+		//checkForDens();
+		//checkForParts();
+		//checkForNeutrals();
 
-			signalQueue = rc.emptySignalQueue();
-			targetLocation = Communication.getLocation( signalQueue, Archon.TARGET_LOCATION );
-			typeNumber = getBuildRequest( signalQueue );
-			if( typeNumber >= 0 ) {
-				typeToBeBuilt = RobotType.values()[ typeNumber ];
-			} 
-
-			if( targetLocation != null ) {
-				if( rc.getLocation().distanceSquaredTo( targetLocation ) < rc.getType().attackRadiusSquared ){
-					if( rc.canBuild( randomDir, typeToBeBuilt ) ){
-						rc.build(randomDir, typeToBeBuilt);
-						if (typeToBeBuilt != RobotType.SOLDIER ) {
-							typeToBeBuilt = RobotType.SOLDIER;
-						}
-					} else {
-						partsLocations = rc.sensePartLocations(-1);
-						if( partsLocations.length > 0 ) {
-							myDirection = rc.getLocation().directionTo( Movement.findClosest( partsLocations ) );
-						} else {
-							myDirection = rc.getLocation().directionTo( targetLocation );
-						}
-						Movement.simpleMove( myDirection );
-					}
-				} else {
-					myDirection = rc.getLocation().directionTo( targetLocation );
-					Movement.simpleMove( myDirection );
-				}
+		if ( rc.isCoreReady() ){
+			
+			if ( enemies.size() > 0 ) {
+				moveDefensively( findClosest( enemies ) );
+				callForHelp();
+				rc.setIndicatorString(0, "Fleeing from enemies.");
+				return;
 			} else {
-				if( rc.canBuild( randomDir, typeToBeBuilt ) ){
-					rc.build(randomDir, typeToBeBuilt);
-					if (typeToBeBuilt != RobotType.SOLDIER ) {
-						typeToBeBuilt = RobotType.SOLDIER;
-					}
+				Direction dir = findDirectionToBuid();
+				if ( dir != Direction.NONE ){
+					rc.build( dir , RobotType.SOLDIER );
+					rc.setIndicatorString(0, "Building soldier.");
+					return;
 				} else {
-					partsLocations = rc.sensePartLocations(-1);
-					if( partsLocations.length > 0 ) {
-						myDirection = rc.getLocation().directionTo( Movement.findClosest( partsLocations ) );
-					} else {
-						myDirection = Movement.randomDirection();
-					}
-					Movement.simpleMove( myDirection );
+					rc.setIndicatorString(0, "Cannot build anywhere.");
+					return;
 				}
 			}
+			
+		}
+		rc.setIndicatorString(2, "Nothing to do..." );
+		return;
+
+	}
+
+	private static Direction findDirectionToBuid() {
+		Direction dir = Movement.randomDirection();
+		int i;
+		for( i=1; i<=8; i++ ) {
+			dir.rotateLeft();
+			if ( rc.canBuild( dir, RobotType.SOLDIER ) ){
+				break;
+			}
+		}
+		if ( i<= 8 ) 
+			return dir;
+		else
+			return Direction.NONE;
+	}
+
+	private static void checkForNeutrals() throws GameActionException {
+
+		RobotInfo[] neutrals = rc.senseNearbyRobots(-1, Team.NEUTRAL);
+
+		if ( neutrals.length > 0 ) {
+			RobotInfo neutral = enemies.get(0);
+
+			// Check if these neutrals were already accounted for
+			boolean oldNeutral = false;
+
+			Iterator<MapLocation> iterator = neutralRobots.iterator();
+			while( iterator.hasNext() ){
+				if( rc.canSenseLocation( iterator.next() ) ) {
+					oldNeutral = true;
+					break;
+				}
+			}
+
+			// If not, warn other units by broadcasting four signals.
+			if( !oldNeutral ){
+				neutralRobots.add( neutral.location );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+			}
 		}
 	}
 
-	private static int getBuildRequest( Signal[] signals ) {
-		Signal signal = Communication.getSignal( signals, BUILD_TYPE );
-		if( signal != null && signal.getMessage().length > 0 ){
-			return signal.getMessage()[0];
-		} else {
-			return -1;
+	private static void checkForParts() throws GameActionException {
+
+		// Check if you already know that there are parts near here
+		
+		boolean knownPartsLocation = false;
+
+		Iterator<MapLocation> iterator = parts.iterator();
+		while( iterator.hasNext() ){
+			if( rc.canSenseLocation( iterator.next() ) ) {
+				knownPartsLocation = true;
+				break;
+			}
+		}
+
+		// If not, and if there are parts nearby, let other people know
+		// by broadcasting three signals and take note yourself
+		// of this location yourself.
+		
+		if( !knownPartsLocation && rc.sensePartLocations(-1).length > 0 ) {
+			parts.add( rc.getLocation() );
+			rc.broadcastSignal( MEDIUM_RADIUS );
+			rc.broadcastSignal( MEDIUM_RADIUS );
+			rc.broadcastSignal( MEDIUM_RADIUS );
+		}
+	}
+
+	// The following method is different from the one with the same name
+	// that the soldier class has.
+	
+	private static void updateNearbyRobots() {
+		// TODO: Extract everything from senseNearbyRobots();
+		RobotInfo[] robots = rc.senseNearbyRobots();
+		
+		enemies.clear();
+		allies.clear();
+		enemiesInRange.clear();
+		densNearby.clear();
+		neutralsNearby.clear();
+		
+		for( int i=0; i<robots.length; i++ ){
+			
+			if ( robots[i].team == rc.getTeam() ) {
+				allies.add( robots[i] );
+			} else if ( robots[i].team == rc.getTeam().opponent() ){
+				if( robots[i].type != RobotType.SCOUT ){
+					enemies.add( robots[i] );
+				}
+			} else if ( robots[i].team == Team.ZOMBIE ){
+				if ( robots[i].type == RobotType.ZOMBIEDEN ) {
+					densNearby.add( robots[i] );
+				} else {
+					enemies.add( robots[i] );
+				}
+			} else if ( robots[i].team == Team.NEUTRAL ) {
+				neutralsNearby.add( robots[i] );
+			} 
+			
+		}
+		
+		for( RobotInfo enemy : enemies ){
+			if ( rc.canAttackLocation( enemy.location ) ){
+				enemiesInRange.add( enemy );
+			}
+		}
+	}
+
+	private static void checkForDens() throws GameActionException {
+
+		for( RobotInfo den : densNearby ) {
+			// Check if this den was already accounted for
+			boolean oldDen = false;
+
+			Iterator<MapLocation> iterator = zombieDens.iterator();
+			while( iterator.hasNext() ){
+				if( rc.canSenseLocation( iterator.next() ) ) {
+					oldDen = true;
+					break;
+				}
+			}
+
+			// If not, warn other units by broadcasting two signals.
+			if( !oldDen ){
+				zombieDens.add( den.location );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+				rc.broadcastSignal( MEDIUM_RADIUS );
+			}
+			// End of code that is run near a zombie den
 		}
 		
 	}
-	
-	// Method so I can forget the build request implementation
-	private static void sendBuildRequest( RobotType type ) throws GameActionException{
-		rc.broadcastMessageSignal( type.ordinal(), BUILD_TYPE, Communication.SMALL_RADIUS );
+
+	private static void updateIncomingSignals() {
+
+		Signal[] signals = rc.emptySignalQueue();
+		incomingSignals.clear();
+		
+		for( int i=0; i<signals.length; i++ ) {
+			incomingSignals.add( signals[i] );
+		}
 	}
 
-	private static void electMasterArchon() throws GameActionException {
-		Signal latestSignal = Communication.getSignal( rc.emptySignalQueue(), I_AM_THE_MASTER ); 
+	private static void checkForCompletedTasks( ) {
+		
+		// If I am in attacking range of the distress signal of a soldier
+		// and there are no enemy soldiers nearby, dismiss the distress
+		// signal.
+
+		if ( enemies.size() == 0 ) {
+			
+			if ( densNearby.size() == 0 ){
+				Iterator<MapLocation> iterator2 = zombieDens.iterator();
+				while( iterator2.hasNext() ){
+					if( rc.canAttackLocation( iterator2.next() ) ) {
+						iterator2.remove();
+					}
+				}
+			}
+			
+		}
+	}
+
+	private static void updateTasks() {
+
+		// Start processing signals from soldiers 
+		// If signal has no message, it is a signal from a soldier.
+
+		LinkedList<Signal> fromSoldiers = new LinkedList<Signal>();
+
+		for ( Signal beep : incomingSignals ) {
+			if ( beep.getMessage() == null ) {
+				fromSoldiers.add( beep );
+			}
+		}
+
+		// If that soldier sent only one signal this (last?) turn, it is
+		// calling for help. Note that removing an element from a
+		// LinkedList return false if the list does not contain the element.
+
+		for ( Signal beep : fromSoldiers ) {
+
+			int count = 0;
+			for ( Signal bop : fromSoldiers ) {
+				if ( bop == beep ) {
+					count++;
+				}
+			}
+
+			switch ( count ) {
+			case 1:
+				break;
+			case 2:
+				Iterator<MapLocation> iterator2 = zombieDens.iterator();
+				while( iterator2.hasNext() ){
+					if( iterator2.next().distanceSquaredTo( beep.getLocation() ) < RobotType.SOLDIER.attackRadiusSquared ) {
+						iterator2.remove();
+					}
+				}
+				zombieDens.add( beep.getLocation() );
+				break;
+			}
+
+		}
+
+		// Start processing message signals
+
+		for ( Signal ding : incomingSignals ) {
+			if ( ding.getMessage() != null && ding.getMessage().length > 0 ) {
+				int message = ding.getMessage()[0]; 
 				
-		if( latestSignal == null ) {
-			isMasterArchon = true;
-			rc.broadcastMessageSignal(0, I_AM_THE_MASTER, Communication.LARGE_RADIUS );
-			rc.setIndicatorString(0, "Hello. I am the MASTER ARCHON.");
-		} else {
-			rc.setIndicatorString(0, "Hello. I am the an Archon.");
-		}
-	}
-	
-	private static void masterArchonCode() throws GameActionException {
-		MapLocation aheadOfMe;
-		int round = rc.getRoundNum();
-		signalQueue = rc.emptySignalQueue();
-		
-		locateEnemy();
-		
-		if( enemyLocation != null ){
-			myDirection = rc.getLocation().directionTo( enemyLocation );
+				switch ( message ) {
+				case Archon.HELP:
+//					Iterator<Signal> iterator3 = archonsInDanger.iterator();
+//					while( iterator3.hasNext() ){
+//						if( iterator3.next().getID() == ding.getID() ) {
+//							iterator3.remove();
+//						}
+//					}
+//					archonsInDanger.add( ding );
+					break;
+				}
+				
+			}
 		}
 
-		if( round % 3 != 1 ) {
-			aheadOfMe = Movement.getLocationAhead( myDirection );
-			Communication.broadcastLocation( aheadOfMe, TARGET_LOCATION, Communication.SMALL_RADIUS );
+		checkForCompletedTasks();
+	}
+
+
+
+
+	// A single signal without a message is interpreted as a distress signal from
+	// a soldier.
+	
+	private static void callForHelp() throws GameActionException {
+//		if( !sentASignalThisTurn ){
+			rc.broadcastSignal( SMALL_RADIUS );
+//		}
+	}
+
+	private static void moveDefensively( RobotInfo enemy ) throws GameActionException {
+		MapLocation myLocation = rc.getLocation();
+		int toEnemy = myLocation.distanceSquaredTo( enemy.location );
+		
+		Direction bestDirection = null;
+		int largestDistanceSquared = toEnemy;
+		
+		for( Direction dir : Direction.values() ) {
+			if ( rc.canMove( dir ) && enemy.location.distanceSquaredTo( myLocation.add( dir ) ) > largestDistanceSquared ) {
+				bestDirection = dir;
+				largestDistanceSquared = enemy.location.distanceSquaredTo( myLocation.add( dir ) );
+			}
+		}
+		
+		if ( bestDirection == null ) {
+			return;
 		} else {
-			if ( !rc.onTheMap( rc.getLocation().add(myDirection, 4) ) ) {
-				myDirection = Movement.randomDirection();
-				rc.setIndicatorString(1, "I don't have the enemy location." );
-				// this changes directions if current one leads out of the map.
+			rc.move( bestDirection );
+		}
+	}
+
+	private static RobotInfo findClosest( ArrayList<RobotInfo> robots ) {
+		if( robots.size() > 0 ){
+			int closestIndex = 0;
+			double smallestDistanceSquared = rc.getLocation().distanceSquaredTo( robots.get( closestIndex ).location );
+
+			double distanceSquared;
+
+			for(int i=1; i<robots.size(); i++) {
+				distanceSquared = robots.get(i).maxHealth - robots.get(i).health;
+				if ( distanceSquared < smallestDistanceSquared ){
+					closestIndex = i;
+					smallestDistanceSquared = distanceSquared;
+				}
 			}
-			else {
-				Movement.simpleMove( myDirection );
-			}
+			return robots.get( closestIndex );
+		} else {
+			return null;
 		}
 	}
 	
-	private static void locateEnemy() throws GameActionException {
-		int mySensorRange = rc.getType().sensorRadiusSquared;
-		RobotInfo[] enemyRobots = rc.senseNearbyRobots( mySensorRange, rc.getTeam().opponent() );
-		
-		// If there are robots nearby, I know the enemy location. The wait=0 and askedScouts=false
-		// lines interrupt any locateEnemy() search.
-		if( enemyRobots.length > 2 ){
-			enemyLocation = enemyRobots[0].location;
-			wait=0;
-			askedScouts = false;
-			rc.setIndicatorString(1, "I see the enemy.");
-			return;
-		}
-		// If I am walking to the enemy location and I have not reached it yet, I know where it is.
-		// But if I have reached it and see no enemies around (since the if clause above is
-		// necessarily false at this point), I should start looking for enemies again.
-		if( enemyLocation != null &&
-				rc.getLocation().distanceSquaredTo( enemyLocation ) > mySensorRange/2 ) {
-			wait=0;
-			askedScouts = false;
-			rc.setIndicatorString(1, "I am going to the enemy's location.");
-			return;
-		} 
-		// In looking for enemies there will be waiting periods. If during one of these I receive
-		// the enemy location, I use it and interrupt the search for enemies.
-		if( wait>0 ){
-			wait--;
-			enemyLocation = Communication.getLocation( signalQueue, Scout.ENEMY_LOCATION );
-			if( enemyLocation != null ){
-				wait = 0;
-				askedScouts = false;
-			}
-			return;
-		}
-		// Search goes: Ask scouts where the enemy is. Wait for an answer. If none comes, 
-		// tell normal archons to build scouts.
-		if( !askedScouts ){
-			rc.broadcastMessageSignal(0, WHERE_IS_THE_ENEMY, Communication.LARGE_RADIUS);
-			askedScouts = true;
-			wait = 50;
-			rc.setIndicatorString(1, "I asked scouts the enemy location." );
-			return;
-		}
-		// At this point no scout replied
-		if( askedScouts ){
-			sendBuildRequest( RobotType.SCOUT );
-			askedScouts = false;
-			wait = 50;
-			rc.setIndicatorString(1, "No scouts replied. I ordered some more from Amazon.");
-		}
-	}
 }
