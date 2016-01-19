@@ -12,16 +12,17 @@ public class Archon {
 	private static ArrayList<RobotInfo> enemiesInRange = new ArrayList<RobotInfo>();
 	private static ArrayList<RobotInfo> densNearby = new ArrayList<RobotInfo>();
 	private static ArrayList<RobotInfo> neutralsNearby = new ArrayList<RobotInfo>();
+	private static ArrayList<MapLocation> partsNearby = new ArrayList<MapLocation>();
 	
 	private static LinkedList<Signal> incomingSignals = new LinkedList<Signal>();
 	private static LinkedList<MapLocation> zombieDens = new LinkedList<MapLocation>();
 	private static LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
 	private static LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
+	private static final int MAX_QUEUE_SIZE = 5;
 	
 	// Broadcast radius for signals
 	private static final int SMALL_RADIUS = 225;
 	private static final int MEDIUM_RADIUS = 625;
-	private static final int LARGE_RADIUS = 900;
 	
 	// Message meanings
 	public static final int HELP = 1000;
@@ -57,34 +58,49 @@ public class Archon {
 		updateNearbyRobots();
 		updateIncomingSignals();
 		
-		//updateTasks();
-		//checkForDens();
-		//checkForParts();
+		updateTasks();
+		checkForDens();
+		checkForParts();
 		//checkForNeutrals();
+		
+		rc.setIndicatorString( 1 , "Number of locations with parts that have been spotted: " + parts.size() );
 
 		if ( rc.isCoreReady() ){
 			
-			if ( enemies.size() > 0 ) {
+			// Run if need be
+			
+			if ( enemies.size() > allies.size() ) {
 				moveDefensively( findClosest( enemies ) );
 				callForHelp();
 				rc.setIndicatorString(0, "Fleeing from enemies.");
 				return;
-			} else {
-				Direction dir = findDirectionToBuid();
-				if ( dir != Direction.NONE ){
-					rc.build( dir , RobotType.SOLDIER );
-					rc.setIndicatorString(0, "Building soldier.");
-					return;
-				} else {
-					rc.setIndicatorString(0, "Cannot build anywhere.");
-					return;
-				}
 			}
+
+			// If safe, build a soldier if possible
+
+			Direction dir = findDirectionToBuid();
+			if ( dir != Direction.NONE ){
+				rc.build( dir , RobotType.SOLDIER );
+				rc.setIndicatorString(0, "Building soldier.");
+				return;
+			}
+
+			// If cannot build a soldier, try to collect parts.
+
+			if ( partsNearby.size() > 0 ) {
+				Movement.simpleMove( rc.getLocation().directionTo( partsNearby.get(0) ) );
+				rc.setIndicatorString(0, "Going for parts.");
+				return;
+			} else if ( !parts.isEmpty() ) {
+				Movement.simpleMove( rc.getLocation().directionTo( parts.element() ) );
+				rc.setIndicatorString(0, "Going for parts.");
+				return;
+			} 
+
+			rc.setIndicatorString(0, "Nothing to do.");
 			
 		}
-		rc.setIndicatorString(2, "Nothing to do..." );
-		return;
-
+		
 	}
 
 	private static Direction findDirectionToBuid() {
@@ -96,6 +112,7 @@ public class Archon {
 				break;
 			}
 		}
+		// i<=8 will occur if, and only if, break was called.
 		if ( i<= 8 ) 
 			return dir;
 		else
@@ -149,8 +166,11 @@ public class Archon {
 		// by broadcasting three signals and take note yourself
 		// of this location yourself.
 		
-		if( !knownPartsLocation && rc.sensePartLocations(-1).length > 0 ) {
+		if( !knownPartsLocation && partsNearby.size() > 0 ) {
 			parts.add( rc.getLocation() );
+			if( parts.size() > MAX_QUEUE_SIZE ) {
+				parts.remove();
+			}
 			rc.broadcastSignal( MEDIUM_RADIUS );
 			rc.broadcastSignal( MEDIUM_RADIUS );
 			rc.broadcastSignal( MEDIUM_RADIUS );
@@ -195,6 +215,12 @@ public class Archon {
 				enemiesInRange.add( enemy );
 			}
 		}
+		
+		partsNearby.clear();
+		MapLocation[] locations = rc.sensePartLocations(-1); 
+		for ( int i=0; i<locations.length; i++ ){
+			partsNearby.add( locations[i] );
+		}
 	}
 
 	private static void checkForDens() throws GameActionException {
@@ -214,6 +240,9 @@ public class Archon {
 			// If not, warn other units by broadcasting two signals.
 			if( !oldDen ){
 				zombieDens.add( den.location );
+				if( zombieDens.size() > MAX_QUEUE_SIZE ) {
+					zombieDens.remove();
+				}
 				rc.broadcastSignal( MEDIUM_RADIUS );
 				rc.broadcastSignal( MEDIUM_RADIUS );
 			}
@@ -228,27 +257,25 @@ public class Archon {
 		incomingSignals.clear();
 		
 		for( int i=0; i<signals.length; i++ ) {
-			incomingSignals.add( signals[i] );
+			if ( signals[i].getTeam() == rc.getTeam() )
+				incomingSignals.add( signals[i] );
 		}
 	}
 
 	private static void checkForCompletedTasks( ) {
 		
-		// If I am in attacking range of the distress signal of a soldier
-		// and there are no enemy soldiers nearby, dismiss the distress
-		// signal.
-
-		if ( enemies.size() == 0 ) {
+		// If there are no spare parts nearby, cross the current location
+		// from the list of locations with parts.
+		
+		if ( partsNearby.size() == 0 ){
 			
-			if ( densNearby.size() == 0 ){
-				Iterator<MapLocation> iterator2 = zombieDens.iterator();
-				while( iterator2.hasNext() ){
-					if( rc.canAttackLocation( iterator2.next() ) ) {
-						iterator2.remove();
-					}
+			Iterator<MapLocation> iterator = parts.iterator();
+			while( iterator.hasNext() ){
+				if( rc.getLocation().distanceSquaredTo( iterator.next() ) < RobotType.SOLDIER.attackRadiusSquared ) {
+					iterator.remove();
 				}
 			}
-			
+
 		}
 	}
 
@@ -269,27 +296,31 @@ public class Archon {
 		// calling for help. Note that removing an element from a
 		// LinkedList return false if the list does not contain the element.
 
+		
 		for ( Signal beep : fromSoldiers ) {
-
+			
 			int count = 0;
 			for ( Signal bop : fromSoldiers ) {
-				if ( bop == beep ) {
+				if ( bop.getID() == beep.getID() ) {
 					count++;
 				}
 			}
 
 			switch ( count ) {
-			case 1:
-				break;
-			case 2:
-				Iterator<MapLocation> iterator2 = zombieDens.iterator();
-				while( iterator2.hasNext() ){
-					if( iterator2.next().distanceSquaredTo( beep.getLocation() ) < RobotType.SOLDIER.attackRadiusSquared ) {
-						iterator2.remove();
+			
+			case 3:
+				Iterator<MapLocation> iterator3 = parts.iterator();
+				while( iterator3.hasNext() ){
+					if( iterator3.next().distanceSquaredTo( beep.getLocation() ) < rc.getType().attackRadiusSquared ) {
+						iterator3.remove();
 					}
 				}
-				zombieDens.add( beep.getLocation() );
+				parts.add( beep.getLocation() );
+				if( parts.size() > MAX_QUEUE_SIZE ) {
+					parts.remove();
+				}
 				break;
+				
 			}
 
 		}

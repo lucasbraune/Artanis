@@ -4,21 +4,25 @@ import java.util.*;
 import battlecode.common.*;
 
 public class Soldier {
-	
-	private static RobotController rc;
 
+	private static RobotController rc = RobotPlayer.rc;
+	
+	private static Readings readings = new Readings( rc );
+	
 	private static ArrayList<RobotInfo> enemies = new ArrayList<RobotInfo>();
 	private static ArrayList<RobotInfo> allies = new ArrayList<RobotInfo>();
 	private static ArrayList<RobotInfo> enemiesInRange = new ArrayList<RobotInfo>();
 	private static ArrayList<RobotInfo> densNearby = new ArrayList<RobotInfo>();
 	private static ArrayList<RobotInfo> neutralsNearby = new ArrayList<RobotInfo>();
-	
+	private static ArrayList<MapLocation> partsNearby = new ArrayList<MapLocation>();
 	private static LinkedList<Signal> incomingSignals = new LinkedList<Signal>();
+	
 	private static LinkedList<Signal> archonsInDanger = new LinkedList<Signal>();
 	private static LinkedList<Signal> soldiersInDanger = new LinkedList<Signal>();
 	private static LinkedList<MapLocation> zombieDens = new LinkedList<MapLocation>();
 	private static LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
 	private static LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
+	private static final int MAX_QUEUE_SIZE = 5;
 	
 	// For scouting
 	private static int timeGoingOneWay = 0;
@@ -34,7 +38,6 @@ public class Soldier {
 	// Broadcast radius for distress signals
 	private static final int SMALL_RADIUS = 225;
 	private static final int MEDIUM_RADIUS = 625;
-	private static final int LARGE_RADIUS = 900;
 	
 	public static void code( ){
 		rc = RobotPlayer.rc;		
@@ -59,15 +62,18 @@ public class Soldier {
 	}
 
 	private static void repeat() throws GameActionException {
-
+		
 		// Think before changing the order in which these methods are executed.
 		updateNearbyRobots();
 		updateIncomingSignals();
 		sentASignalThisTurn = false;
+		
 		updateTasks();
 		checkForDens();
-		//checkForParts();
+		checkForParts();
 		//checkForNeutrals();
+		
+		rc.setIndicatorString( 4 , "Soldiers needing help: " + soldiersInDanger.size() );
 
 		if ( enemies.size() > 0 ) {
 			fight();
@@ -174,8 +180,11 @@ public class Soldier {
 		// by broadcasting three signals and take note yourself
 		// of this location yourself.
 		
-		if( !knownPartsLocation && rc.sensePartLocations(-1).length > 0 && !sentASignalThisTurn ) {
+		if( !knownPartsLocation && partsNearby.size() > 0 && !sentASignalThisTurn ) {
 			parts.add( rc.getLocation() );
+			if( parts.size() > MAX_QUEUE_SIZE ) {
+				parts.remove();
+			}
 			rc.broadcastSignal( MEDIUM_RADIUS );
 			rc.broadcastSignal( MEDIUM_RADIUS );
 			rc.broadcastSignal( MEDIUM_RADIUS );
@@ -215,6 +224,12 @@ public class Soldier {
 				enemiesInRange.add( enemy );
 			}
 		}
+		
+		partsNearby.clear();
+		MapLocation[] locations = rc.sensePartLocations(-1); 
+		for ( int i=0; i<locations.length; i++ ){
+			partsNearby.add( locations[i] );
+		}	
 	}
 
 	private static void checkForDens() throws GameActionException {
@@ -234,6 +249,9 @@ public class Soldier {
 			// If not, warn other units by broadcasting two signals.
 			if( !oldDen && !sentASignalThisTurn ){
 				zombieDens.add( den.location );
+				if( zombieDens.size() > MAX_QUEUE_SIZE ) {
+					zombieDens.remove();
+				}
 				rc.broadcastSignal( MEDIUM_RADIUS );
 				rc.broadcastSignal( MEDIUM_RADIUS );
 			}
@@ -248,7 +266,8 @@ public class Soldier {
 		incomingSignals.clear();
 		
 		for( int i=0; i<signals.length; i++ ) {
-			incomingSignals.add( signals[i] );
+			if ( signals[i].getTeam() == rc.getTeam() )
+				incomingSignals.add( signals[i] );
 		}
 	}
 
@@ -307,7 +326,7 @@ public class Soldier {
 
 			int count = 0;
 			for ( Signal bop : fromSoldiers ) {
-				if ( bop == beep ) {
+				if ( bop.getID() == beep.getID() ) {
 					count++;
 				}
 			}
@@ -321,6 +340,9 @@ public class Soldier {
 					}
 				}
 				soldiersInDanger.add( beep );
+				if( soldiersInDanger.size() > MAX_QUEUE_SIZE ) {
+					soldiersInDanger.remove();
+				}
 				break;
 			case 2:
 				Iterator<MapLocation> iterator2 = zombieDens.iterator();
@@ -330,9 +352,23 @@ public class Soldier {
 					}
 				}
 				zombieDens.add( beep.getLocation() );
+				if( zombieDens.size() > MAX_QUEUE_SIZE ) {
+					zombieDens.remove();
+				}
+				break;
+			case 3:
+				Iterator<MapLocation> iterator3 = parts.iterator();
+				while( iterator3.hasNext() ){
+					if( iterator3.next().distanceSquaredTo( beep.getLocation() ) < rc.getType().attackRadiusSquared ) {
+						iterator3.remove();
+					}
+				}
+				parts.add( beep.getLocation() );
+				if( parts.size() > MAX_QUEUE_SIZE ) {
+					parts.remove();
+				}
 				break;
 			}
-
 		}
 
 		// Start processing message signals
@@ -350,6 +386,9 @@ public class Soldier {
 						}
 					}
 					archonsInDanger.add( ding );
+					if( archonsInDanger.size() > MAX_QUEUE_SIZE ) {
+						archonsInDanger.remove();
+					}
 					break;
 				}
 				
@@ -377,7 +416,7 @@ public class Soldier {
 			
 			if ( rc.getInfectedTurns() > 0 && rc.getHealth() < INFECTED_THRESHOLD * rc.getType().maxHealth ) {
 				if ( rc.isCoreReady() ){
-					moveDefensively( findClosest( enemies ) );
+					moveDefensively( getClosestEnemy() );
 				}
 				rc.setIndicatorString(0, "Fleeing because of infection.");
 			} else {
@@ -386,7 +425,7 @@ public class Soldier {
 				// Try to move otherwise.
 				
 				if ( rc.isWeaponReady() && enemiesInRange.size() > 0 ) {
-					rc.attackLocation( findWeakest( enemiesInRange ).location );
+					rc.attackLocation( getWeakestEnemy().location );
 					rc.setIndicatorString(0, "Attacking nearest enemy.");
 				} else if (rc.isCoreReady() ){
 					
@@ -396,10 +435,11 @@ public class Soldier {
 					// the closest enemy.
 					
 					if ( allies.size() >= enemies.size() ){
-						moveOffensively( findClosest( enemies ) );
+						moveOffensively( getClosestEnemy() );
 						rc.setIndicatorString(0, "Cannot attack. Moving to sweetspot.");
 					} else {
-						moveDefensively( findClosest( enemies ) );
+						moveDefensively( getClosestEnemy() );
+						
 						callForHelp();
 						rc.setIndicatorString(0, "Cannot attack. Fleeing from enemy.");
 					}	
@@ -409,6 +449,8 @@ public class Soldier {
 			}
 		}
 	}
+	
+
 
 	// A single signal without a message is interpreted as a distress signal from
 	// a soldier.
@@ -418,30 +460,40 @@ public class Soldier {
 			rc.broadcastSignal( SMALL_RADIUS );
 		}
 	}
+	
 
+	//////////////////////////////////////////////////////////////////////
+	//////////// Methods for offensive and defensive movement ////////////
+	//////////////////////////////////////////////////////////////////////
+	
+	// Added break command in the Direction loops of both moveOffensively and
+	// moveDefensively to improve bytecode performance
+	
 	private static void moveOffensively(RobotInfo enemy ) throws GameActionException {
 		int myAttackRadiusSquared = rc.getType().attackRadiusSquared;
 		MapLocation myLocation = rc.getLocation();
 		
 		Direction bestDirection = null;
-		int smallestError = Math.abs( myLocation.distanceSquaredTo( enemy.location ) - myAttackRadiusSquared );
+		int smallestError = myAttackRadiusSquared - myLocation.distanceSquaredTo( enemy.location );
 		MapLocation adjacent;
 		int adjacentError;
-		
+
 		for ( Direction dir : Direction.values() ) {
 			adjacent = myLocation.add( dir );
-			adjacentError = Math.abs( adjacent.distanceSquaredTo( enemy.location ) - myAttackRadiusSquared );
+			adjacentError = myAttackRadiusSquared - adjacent.distanceSquaredTo( enemy.location );
 			if ( rc.canMove( dir ) && adjacentError < smallestError ) {
 				bestDirection = dir;
 				smallestError = adjacentError;
+				break;
 			}
 		}
-		
+
 		if ( bestDirection == null ) {
 			return;
 		} else {
 			rc.move( bestDirection );
 		}
+		
 	}
 
 	private static void moveDefensively( RobotInfo enemy ) throws GameActionException {
@@ -455,6 +507,7 @@ public class Soldier {
 			if ( rc.canMove( dir ) && enemy.location.distanceSquaredTo( myLocation.add( dir ) ) > largestDistanceSquared ) {
 				bestDirection = dir;
 				largestDistanceSquared = enemy.location.distanceSquaredTo( myLocation.add( dir ) );
+				break;
 			}
 		}
 		
@@ -463,6 +516,38 @@ public class Soldier {
 		} else {
 			rc.move( bestDirection );
 		}
+	}
+	
+	/////////////////////////////////////////////////////////////////////
+	////// Methods for finding the weakest and the closest enemies //////
+	/////////////////////////////////////////////////////////////////////
+	
+	private static RobotInfo getWeakestEnemy() {
+		ArrayList<RobotInfo> candidates = new ArrayList<RobotInfo>();
+		if ( enemiesInRange.size() > 0 ){
+			for ( int i=0; i<enemiesInRange.size() && i<5; i++ ) {
+				candidates.add( enemiesInRange.get(i) );
+			}
+		} else {
+			for ( int i=0; i<enemies.size() && i<5; i++ ) {
+				candidates.add( enemies.get(i) );
+			}
+		}
+		return findWeakest( candidates );
+	}
+
+	private static RobotInfo getClosestEnemy() {
+		ArrayList<RobotInfo> candidates = new ArrayList<RobotInfo>();
+		if ( enemiesInRange.size() > 0 ){
+			for ( int i=0; i<enemiesInRange.size() && i<5; i++ ) {
+				candidates.add( enemiesInRange.get(i) );
+			}
+		} else {
+			for ( int i=0; i<enemies.size() && i<5; i++ ) {
+				candidates.add( enemies.get(i) );
+			}
+		}
+		return findClosest( candidates );
 	}
 
 	private static RobotInfo findWeakest( ArrayList<RobotInfo> robots ) {

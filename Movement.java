@@ -10,7 +10,7 @@ public class Movement {
 	// Units will avoid going where they have already been.
 	private static final int[] possibleDirections = {0,1,-1,2,-2,3,-3};
 	private static ArrayList<MapLocation> pastLocations = new ArrayList<MapLocation>();
-	private static final int LOCATIONS_REMEMBERED = 10;
+	private static final int LOCATIONS_REMEMBERED = 5;
 	
 	// Start clearing rubble if patience drops below zero;
 	private static final int MAX_PATIENCE = 10;
@@ -26,6 +26,8 @@ public class Movement {
 	private static Random rnd = new Random ( rc.getID() );
 	
 	// This was taken from Max Mann's tutorials.
+
+	
 	public static void simpleMove ( Direction dir ) throws GameActionException {
 		Direction candidateDirection = dir;
 		boolean coreReady;
@@ -60,7 +62,7 @@ public class Movement {
 			if (patience < 0 && coreReady ) {
 				if ( rc.senseRubble( rc.getLocation().add( dir ) ) > GameConstants.RUBBLE_OBSTRUCTION_THRESH ) {
 					rc.clearRubble( dir );
-					patience += PATIENCE_INCREASE;
+					increasePatience();
 				}
 			}
 
