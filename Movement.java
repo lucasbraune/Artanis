@@ -8,7 +8,7 @@ public class Movement {
 	private static RobotController rc = RobotPlayer.rc;
 	
 	// Units will avoid going where they have already been.
-	private static final int[] possibleDirections = {0,1,-1,2,-2,3,-3};
+	private static final int[] possibleDirections = {0,1,-1,2,-2, 3, -3};
 	private static ArrayList<MapLocation> pastLocations = new ArrayList<MapLocation>();
 	private static final int LOCATIONS_REMEMBERED = 5;
 	
@@ -19,53 +19,60 @@ public class Movement {
 	private static final int PATIENCE_INCREASE = 1;
 	private static int patience = MAX_PATIENCE; 
 	
-	// Units will gather a few steps ahead of the master archon.
-	private static final int STEPS_AHEAD = 3;
-	
-	// This is used in the randomDirection() method
-	private static Random rnd = new Random ( rc.getID() );
-	
 	// This was taken from Max Mann's tutorials.
-
-	
+	// See: www.battlecode.org
 	public static void simpleMove ( Direction dir ) throws GameActionException {
 		Direction candidateDirection = dir;
 		boolean coreReady;
 		
-		if ( dir == null || dir == Direction.NONE || dir == Direction.OMNI ) 
+		rc.setIndicatorString(0, "SIMPLE MOVEMENT: Begin. Patience: " + patience);
+		
+		if ( dir == null || dir == Direction.NONE || dir == Direction.OMNI ) {
+			rc.setIndicatorString(0, "MOVEMENT: Bad direction. Patience: " + patience);
 			return;
+		}
+			
 		
 		coreReady = rc.isCoreReady();
 		if ( coreReady ) {
+			
+			rc.setIndicatorString(0, "SIMPLE MOVEMENT: Core is ready. Patience: " + patience);
 			
 			pastLocations.add( rc.getLocation() );
 			if (pastLocations.size() > LOCATIONS_REMEMBERED ) {
 				pastLocations.remove(0);
 			}
 			
-			for(int i=0; i<possibleDirections.length; i++ ){
-				
+			for( int i=0; (i<possibleDirections.length && patience >= 0) || i==0; i++ ){
 				candidateDirection = Direction.values()[ ( dir.ordinal() + possibleDirections[i] + 8 ) % 8 ];
 				MapLocation candidateLocation = rc.getLocation().add( candidateDirection );
 				
 				if( rc.canMove(candidateDirection) && !pastLocations.contains( candidateLocation ) ){
 					rc.move(candidateDirection);
 					coreReady = false;
-					increasePatience();
+					if ( i==0 ) {
+						increasePatience();
+						rc.setIndicatorString(0, "MOVEMENT: I just moved just like I wanted to! Patience: " + patience );
+					} else {
+						decreasePatience();
+						rc.setIndicatorString(0, "MOVEMENT: I just moved, but not quite in the direction I planned! Patience: " + patience );
+					}
 					break;
-				} else {
-					decreasePatience();
-					rc.setIndicatorString(1, "Had to change directions.");
 				}
-				
 			}
+			
 			if (patience < 0 && coreReady ) {
-				if ( rc.senseRubble( rc.getLocation().add( dir ) ) > GameConstants.RUBBLE_OBSTRUCTION_THRESH ) {
+				if ( rc.senseRubble( rc.getLocation().add( dir ) ) >= GameConstants.RUBBLE_OBSTRUCTION_THRESH ) {
 					rc.clearRubble( dir );
 					increasePatience();
+					rc.setIndicatorString(1, "MOVEMENT: Clearing rubble.");
+				} else {
+					rc.setIndicatorString(1, "MOVEMENT: I could not move, but there is no reason to clear rubble where I am going.");
 				}
 			}
 
+		} else { 
+			rc.setIndicatorString(1, "MOVEMENTE WARNING: simpleMove was cast without check if the core is ready.");
 		}
 	}
 
@@ -140,34 +147,33 @@ public class Movement {
 			patience = MIN_PATIENCE;
 		}
 	}
+
+	// This is used in the randomDirection() method
+	private static Random rnd = new Random ( rc.getID() );
 	
 	public static Direction randomDirection() {
 		return Direction.values()[(int)(rnd.nextDouble()*8)];
 	}
 	
-	public static MapLocation getLocationAhead ( Direction dir ) {
-		return rc.getLocation().add( dir , STEPS_AHEAD );
-	}
-	
-	public static MapLocation findClosest( MapLocation[] locations ) {	
-		MapLocation closest; 
-		int distanceToClosest, distanceToThisOne;
-		
-		if( locations.length > 0 ) {
-			closest = locations[0];
-			distanceToClosest = rc.getLocation().distanceSquaredTo( closest );
-			for( int i=1; i<locations.length; i++ ) {
-				distanceToThisOne = rc.getLocation().distanceSquaredTo( locations[i] );
-				if( distanceToThisOne < distanceToClosest ) {
-					closest = locations[i];
-					distanceToClosest = distanceToThisOne;
+	private static MapLocation findClosest( ArrayList<MapLocation> locations ) {
+		if( locations.size() > 0 ){
+			int closestIndex = 0;
+			double smallestDistanceSquared = rc.getLocation().distanceSquaredTo( locations.get( closestIndex ) );
+
+			double distanceSquared;
+
+			for(int i=1; i<locations.size(); i++) {
+				distanceSquared = rc.getLocation().distanceSquaredTo( locations.get(i) );
+				if ( distanceSquared < smallestDistanceSquared ){
+					closestIndex = i;
+					smallestDistanceSquared = distanceSquared;
 				}
 			}
-			return closest;
-		}
-		else {
+			return locations.get( closestIndex );
+		} else {
 			return null;
 		}
 	}
+
 	
 }

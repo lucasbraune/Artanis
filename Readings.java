@@ -5,7 +5,15 @@ import battlecode.common.*;
 
 public class Readings {
 	
-	private RobotController rc = RobotPlayer.rc;
+	public Readings( RobotType type, Team team ) {
+		myType = type;
+		myTeam = team;
+	}
+	
+	private RobotType myType;
+	private Team myTeam;
+	
+	public MapLocation myLocation = null;
 	
 	// Robots
 	public ArrayList<RobotInfo> enemies = new ArrayList<RobotInfo>();
@@ -22,10 +30,11 @@ public class Readings {
 	// Signals
 	public LinkedList<Signal> signals = new LinkedList<Signal>();
 	
-	public void update() {
-		// Update robots and zombie dens
-		RobotInfo[] robots = rc.senseNearbyRobots();
+	public void update( MapLocation myLoc, RobotInfo[] robots, MapLocation[] partLocations, Signal[] signalQueue ) {
+		// update myLocation
+		myLocation = myLoc;
 		
+		// Update robots and zombie dens
 		enemies.clear();
 		allies.clear();
 		enemiesInRange.clear();
@@ -34,9 +43,9 @@ public class Readings {
 		
 		for( int i=0; i<robots.length; i++ ){
 			
-			if ( robots[i].team == rc.getTeam() ) {
+			if ( robots[i].team == myTeam ) {
 				allies.add( robots[i] );
-			} else if ( robots[i].team == rc.getTeam().opponent() ){
+			} else if ( robots[i].team == myTeam.opponent() ){
 				enemies.add( robots[i] );
 			} else if ( robots[i].team == Team.ZOMBIE ){
 				if ( robots[i].type == RobotType.ZOMBIEDEN ) {
@@ -51,33 +60,35 @@ public class Readings {
 		}
 		
 		for( RobotInfo enemy : enemies ){
-			if ( rc.canAttackLocation( enemy.location ) ){
+			if (  myLocation.distanceSquaredTo( enemy.location ) <= myType.attackRadiusSquared ) {
 				enemiesInRange.add( enemy );
 			}
 		}
 		
 		// Update parts
 		parts.clear();
-		MapLocation[] locations = rc.sensePartLocations(-1); 
-		for ( int i=0; i<locations.length; i++ ){
-			parts.add( locations[i] );
+		if( myType != RobotType.ARCHON && partLocations.length>0) {
+			parts.add(partLocations[0] );
+		} else {
+			for ( int i=0; i<partLocations.length; i++ ){
+				parts.add( partLocations[i] );			
+			}
 		}
+
 		
 		// Update signals
-		Signal[] buzz = rc.emptySignalQueue();
 		signals.clear();
-		
-		for( int i=0; i<buzz.length; i++ ) {
-			if ( buzz[i].getTeam() == rc.getTeam() )
-				signals.add( buzz[i] );
+		for( int i=0; i<signalQueue.length; i++ ) {
+			if ( signalQueue[i].getTeam() == myTeam )
+				signals.add( signalQueue[i] );
 		}
 	}
 	
 	public void considerDensAsEnemies() {
 		for( RobotInfo den : dens ) {
 			enemies.add( den );
-			if( rc.canAttackLocation( den.location ) ){
-				enemiesInRange.add( den );
+			if (  myLocation.distanceSquaredTo( den.location ) <= myType.attackRadiusSquared ) {
+				enemiesInRange.add(0, den );
 			}
 		}
 	}
