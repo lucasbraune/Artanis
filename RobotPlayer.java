@@ -18,7 +18,7 @@ public class RobotPlayer {
 		if( myType == RobotType.ARCHON ) {
 			Archon.code( );
 		} else if( myType == RobotType.SCOUT ) {
-			Scout.code( );
+			Soldier.code( );
 		} else if( myType == RobotType.SOLDIER ) {
 			Soldier.code( );
 		} if( myType == RobotType.GUARD ) {

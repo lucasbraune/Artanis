@@ -107,14 +107,7 @@ public class Soldier {
 	//////////////////////////////////////////////////////////////////////
 	/////////////// Begin attackMove() and fight() methods ///////////////
 	//////////////////////////////////////////////////////////////////////
-
-//	private static void attackMove( Direction dir ) throws GameActionException { 
-//		if ( readings.enemies.size() > 0 ) {
-//			fight();
-//		} else {
-//			Movement.simpleMove( dir );
-//		}
-//	}
+	
 
 	private static void fight() throws GameActionException {
 
@@ -185,7 +178,6 @@ public class Soldier {
 					if( adjacentError < smallestError ) {
 						bestDirection = Direction.values()[i];
 						smallestError = adjacentError;
-						break;
 					}
 				}
 			}
@@ -201,7 +193,7 @@ public class Soldier {
 		
 	}
 
-	private static void moveDefensively( RobotInfo enemy ) throws GameActionException {
+	public static void moveDefensively( RobotInfo enemy ) throws GameActionException {
 		MapLocation myLocation = rc.getLocation();
 		int toEnemy = myLocation.distanceSquaredTo( enemy.location );
 		
@@ -212,7 +204,6 @@ public class Soldier {
 			if ( rc.canMove( dir ) && enemy.location.distanceSquaredTo( myLocation.add( dir ) ) > largestDistanceSquared ) {
 				bestDirection = dir;
 				largestDistanceSquared = enemy.location.distanceSquaredTo( myLocation.add( dir ) );
-				break;
 			}
 		}
 		
@@ -241,7 +232,7 @@ public class Soldier {
 		return findWeakest( candidates );
 	}
 
-	private static RobotInfo getClosestEnemy() {
+	public static RobotInfo getClosestEnemy() {
 		ArrayList<RobotInfo> candidates = new ArrayList<RobotInfo>();
 		if ( readings.enemiesInRange.size() > 0 ){
 			for ( int i=0; i<readings.enemiesInRange.size(); i++ ) {
@@ -275,7 +266,7 @@ public class Soldier {
 		}
 	}
 
-	private static RobotInfo findClosest( ArrayList<RobotInfo> robots ) {
+	public static RobotInfo findClosest( ArrayList<RobotInfo> robots ) {
 		if( robots.size() > 0 ){
 			int closestIndex = 0;
 			double smallestDistanceSquared = rc.getLocation().distanceSquaredTo( robots.get( closestIndex ).location );

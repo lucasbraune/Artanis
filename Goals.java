@@ -14,12 +14,16 @@ public class Goals {
 	
 	public LinkedList<Signal> archonsInDanger = new LinkedList<Signal>();
 	public LinkedList<Signal> soldiersInDanger = new LinkedList<Signal>();
+	
 	public LinkedList<MapLocation> zombieDens = new LinkedList<MapLocation>();
+	public LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
 	public LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
 	
 	private boolean canSeeNewDen = false;
-
-	// Maximum size these lists are allowed to have
+	private boolean canSeeNewParts = false;
+	private boolean canSeeNewNeutrals = false;
+	
+		// Maximum size these lists are allowed to have
 	private static final int MAX_QUEUE_SIZE = 5;
 
 	// Broadcast distances (squared)
@@ -30,11 +34,22 @@ public class Goals {
 		myLocation = readings.myLocation;
 		getNewGoalsFrom( readings.signals );
 		canSeeNewDen = checkForNewDen( readings.dens );
+		canSeeNewParts = checkForNewParts( readings.parts );
+		canSeeNewNeutrals = checkForNewNeutrals( readings.neutrals );
 		removeCompletedGoals( readings );
 	}
 	
 	public void transmitNewGoal ( RobotController rc ) throws GameActionException {
 		if ( canSeeNewDen ) {
+			rc.broadcastSignal( SMALL_RADIUS );
+			rc.broadcastSignal( SMALL_RADIUS );
+		} else if ( canSeeNewParts ) {
+			rc.broadcastSignal( SMALL_RADIUS );
+			rc.broadcastSignal( SMALL_RADIUS );
+			rc.broadcastSignal( SMALL_RADIUS );
+		} else if ( canSeeNewNeutrals ) {
+			rc.broadcastSignal( SMALL_RADIUS );
+			rc.broadcastSignal( SMALL_RADIUS );
 			rc.broadcastSignal( SMALL_RADIUS );
 			rc.broadcastSignal( SMALL_RADIUS );
 		}
@@ -61,6 +76,52 @@ public class Goals {
 			// If not, add it to the set of goals.
 			if( !oldDen ) {
 				zombieDens.add( dens.get(0).location );
+				return true;
+			}
+		}
+		
+		return false;
+	}
+	
+private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throws GameActionException {
+		
+		if ( partsLocations.size() > 0 ) {
+			// Check if the given den location is was already knonw
+			boolean oldParts = false;
+			Iterator<MapLocation> iterator = parts.iterator();
+			while( iterator.hasNext() ){
+				if( partsLocations.get(0).distanceSquaredTo( iterator.next() ) <= myType.sensorRadiusSquared ) {
+					oldParts = true;
+					break;
+				}
+			}
+			
+			// If not, add it to the set of goals.
+			if( !oldParts ) {
+				parts.add( partsLocations.get(0) );
+				return true;
+			}
+		}
+		
+		return false;
+	}
+	
+	private boolean checkForNewNeutrals ( ArrayList<RobotInfo> neutrals ) throws GameActionException {
+		
+		if ( neutrals.size() > 0 ) {
+			// Check if the given den location is was already knonw
+			boolean oldDen = false;
+			Iterator<MapLocation> iterator = neutralRobots.iterator();
+			while( iterator.hasNext() ){
+				if( neutrals.get(0).location.distanceSquaredTo( iterator.next() ) <= myType.sensorRadiusSquared ) {
+					oldDen = true;
+					break;
+				}
+			}
+			
+			// If not, add it to the set of goals.
+			if( !oldDen ) {
+				neutralRobots.add( neutrals.get(0).location );
 				return true;
 			}
 		}
@@ -96,6 +157,24 @@ public class Goals {
 				while( iterator2.hasNext() ){
 					if( myLocation.distanceSquaredTo( iterator2.next() ) <= myType.attackRadiusSquared ) {
 						iterator2.remove();
+					}
+				}
+			}
+			
+			if ( readings.parts.size() == 0 && myType == RobotType.ARCHON ){
+				Iterator<MapLocation> iterator3 = parts.iterator();
+				while( iterator3.hasNext() ){
+					if( myLocation.distanceSquaredTo( iterator3.next() ) <= RobotType.SOLDIER.attackRadiusSquared ) {
+						iterator3.remove();
+					}
+				}
+			}
+			
+			if ( readings.neutrals.size() == 0 && myType == RobotType.ARCHON ){
+				Iterator<MapLocation> iterator4 = neutralRobots.iterator();
+				while( iterator4.hasNext() ){
+					if( myLocation.distanceSquaredTo( iterator4.next() ) <= RobotType.SOLDIER.attackRadiusSquared ) {
+						iterator4.remove();
 					}
 				}
 			}
@@ -154,18 +233,30 @@ public class Goals {
 					zombieDens.remove();
 				}
 				break;
-//			case 3:
-//				Iterator<MapLocation> iterator3 = parts.iterator();
-//				while( iterator3.hasNext() ){
-//					if( iterator3.next().distanceSquaredTo( beep.getLocation() ) < myType.attackRadiusSquared ) {
-//						iterator3.remove();
-//					}
-//				}
-//				parts.add( beep.getLocation() );
-//				if( parts.size() > MAX_QUEUE_SIZE ) {
-//					parts.remove();
-//				}
-//				break;
+			case 3:
+				Iterator<MapLocation> iterator3 = parts.iterator();
+				while( iterator3.hasNext() ){
+					if( iterator3.next().distanceSquaredTo( beep.getLocation() ) < myType.attackRadiusSquared ) {
+						iterator3.remove();
+					}
+				}
+				parts.add( beep.getLocation() );
+				if( parts.size() > MAX_QUEUE_SIZE ) {
+					parts.remove();
+				}
+				break;
+			case 4:
+				Iterator<MapLocation> iterator4 = neutralRobots.iterator();
+				while( iterator4.hasNext() ){
+					if( iterator4.next().distanceSquaredTo( beep.getLocation() ) < myType.attackRadiusSquared ) {
+						iterator4.remove();
+					}
+				}
+				neutralRobots.add( beep.getLocation() );
+				if( neutralRobots.size() > MAX_QUEUE_SIZE ) {
+					neutralRobots.remove();
+				}
+				break;
 			}
 		}
 
