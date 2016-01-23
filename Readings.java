@@ -56,6 +56,9 @@ public class Readings {
 					dens.add( robots[i] );
 				} else {
 					enemies.add( robots[i] );
+					if( myLocation.distanceSquaredTo( robots[i].location ) <= myType.attackRadiusSquared ) {
+						enemiesInRange.add( robots[i] );
+					}
 				}
 			} else if ( robots[i].team == Team.NEUTRAL ) {
 				neutrals.add( robots[i] );

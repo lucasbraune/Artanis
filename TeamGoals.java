@@ -62,8 +62,16 @@ public class TeamGoals {
 		rc.broadcastSignal( SMALL_RADIUS );
 	}
 	
+	public void callForHelp ( RobotController rc, int allies ) throws GameActionException {
+		rc.broadcastSignal( SMALL_RADIUS + allies*allies );
+	}
+	
 	void askToClearTheWay( RobotController rc ) throws GameActionException {
 		rc.broadcastMessageSignal( LET_ME_MOVE, 0, TINY_RADIUS);
+	}
+	
+	void askToClearTheWay( RobotController rc, int radius ) throws GameActionException {
+		rc.broadcastMessageSignal( LET_ME_MOVE, 0, TINY_RADIUS + radius*radius);
 	}
 	
 	// Tries to add a den to the goals. Returns true iff succeeds.

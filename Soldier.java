@@ -17,16 +17,20 @@ public class Soldier extends BasicRobot {
 	private  int timeGoingOneWay = 0;
 	private  Direction scoutingDirection = Direction.NONE;
 	private  final int MAX_TIME_ONE_WAY = 5;
-
+	
+	// Give up killing den
+	private int turnsSinceADenWasSeen = 1000;
+	private static final int DEN_MEMORY = 15;
+	
 	void repeat() throws GameActionException {
 		
-		if ( teamGoals.stayClear != null && rc.isCoreReady() ) {
-			simpleMove( rc.getLocation().directionTo( teamGoals.stayClear ).opposite() );
-		}
+		rc.setIndicatorString(0, "");
+		rc.setIndicatorString(1, "");
 		
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
 		
 		if ( readings.enemies.size() > 0 ) {
+			rc.setIndicatorString(0, "SOLDIER AI: Fighting." );
 			fight();
 			return;
 		}
@@ -34,22 +38,45 @@ public class Soldier extends BasicRobot {
 		teamGoals.update( readings );
 		teamGoals.transmitNewGoal( rc );
 		
+		if ( teamGoals.stayClear != null && rc.isCoreReady() ) {
+			simpleMove( rc.getLocation().directionTo( teamGoals.stayClear ).opposite() );
+			rc.setIndicatorString(0, "SOLDIER AI: Making way for an archon.");
+			return;
+		}
+		
+		if ( readings.dens.size() > 0 ){
+			turnsSinceADenWasSeen = 0;
+			readings.considerDensAsEnemies();
+			fight();
+			rc.setIndicatorString(0, "SOLDIER AI: Fighting dens." );
+			return;
+		} else {
+			turnsSinceADenWasSeen++;
+		}
+		
+		if ( turnsSinceADenWasSeen <= DEN_MEMORY ) {
+			if ( !teamGoals.zombieDens.isEmpty() && rc.isCoreReady() ) {
+				simpleMove( rc.getLocation().directionTo( teamGoals.zombieDens.element() ) );
+				rc.setIndicatorString(0, "SOLDIER AI: Moving to a den." );
+				return;
+			}
+		}
+		
 		if ( !teamGoals.archonsInDanger.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.archonsInDanger.element().getLocation() ) );
-			return;
-		} 
-
-		if ( !teamGoals.soldiersInDanger.isEmpty() && rc.isCoreReady() ) {
-			simpleMove( rc.getLocation().directionTo( teamGoals.soldiersInDanger.element().getLocation() ) );
+			rc.setIndicatorString(0, "SOLDIER AI: Going to help an archon." );
 			return;
 		} 
 		
-		readings.considerDensAsEnemies();
-		if ( readings.dens.size() > 0 ){
-			fight();
+		if ( !teamGoals.soldiersInDanger.isEmpty() && rc.isCoreReady() ) {
+			simpleMove( rc.getLocation().directionTo( teamGoals.soldiersInDanger.element().getLocation() ) );
+			rc.setIndicatorString(0, "SOLDIER AI: Going to help a soldier." );
 			return;
-		} else if ( !teamGoals.zombieDens.isEmpty() && rc.isCoreReady() ) {
+		} 
+		
+		if ( !teamGoals.zombieDens.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.zombieDens.element() ) );
+			rc.setIndicatorString(0, "SOLDIER AI: Moving to a den." );
 			return;
 		}
 		
@@ -57,16 +84,18 @@ public class Soldier extends BasicRobot {
 			if ( timeGoingOneWay < MAX_TIME_ONE_WAY && rc.onTheMap( rc.getLocation().add( scoutingDirection ) )) {
 				simpleMove( scoutingDirection );
 				timeGoingOneWay++;
+				rc.setIndicatorString(0, "SOLDIER AI: Scouting" );
 				return;
 			} else {
 				scoutingDirection = randomDirection();
 				simpleMove( scoutingDirection );
 				timeGoingOneWay = 0;
+				rc.setIndicatorString(0, "SOLDIER AI: Changing direction" );
 				return;
 			}
 		} 
 
-		rc.setIndicatorString(1, "SOLDIER AI: Nothing to do..." );
+		rc.setIndicatorString(0, "SOLDIER AI: Nothing to do..." );
 		return;
 
 	}
@@ -78,6 +107,8 @@ public class Soldier extends BasicRobot {
 
 	private void fight() throws GameActionException {
 
+		rc.setIndicatorString(1, "Starting fight algorithm.");
+		
 		if ( readings.enemies.size() > 0 ) {
 			
 			// If there are readings.enemies nearby and the soldier is infected and with
@@ -85,31 +116,44 @@ public class Soldier extends BasicRobot {
 			// pointing to the nearest enemy.
 			
 			if ( rc.getInfectedTurns() > 0 && rc.getHealth() < INFECTED_THRESHOLD * rc.getType().maxHealth ) {
-				if ( rc.isCoreReady() ){
-					moveDefensively( getClosestEnemy() );
-				}
-			} else {
-				
-				// If there are readings.enemies in range and the weapon is ready, shoot the weakest one in range.
-				// Try to move otherwise.
-
-				if ( rc.isWeaponReady() && readings.enemiesInRange.size() > 0 ) {
-					rc.attackLocation( getWeakestEnemy().location );
-				} else if (rc.isCoreReady() ){
-
-					// If there are at least as many readings.allies as readings.enemies nearby, move offensively,
-					// to a 'sweet spot' that is a good place to attack the weakest enemy nearby.
-					// Move defensively otherwise, in a direction that maximizes the distance to
-					// the closest enemy.
-
-					if ( readings.allies.size() >= readings.enemies.size()-1 ){
-						moveOffensively( getClosestEnemy() );
-					} else {
-						moveDefensively( getClosestEnemy() );
-						teamGoals.callForHelp( rc );
+				for( RobotInfo enemy : readings.enemies ) {
+					if ( enemy.type != RobotType.SCOUT && enemy.type != RobotType.ZOMBIEDEN ) {
+						if ( rc.isCoreReady() ){
+							moveDefensively( getClosestEnemy() );
+							rc.setIndicatorString(1, "Infected. Running away.");
+							return;
+						}
 					}
 				}
 			}
+
+			rc.setIndicatorString(1, "Not infected.");
+
+			// If there are readings.enemies in range and the weapon is ready, shoot the weakest one in range.
+			// Try to move otherwise.
+
+			if ( rc.isWeaponReady() && readings.enemiesInRange.size() > 0 ) {
+				rc.attackLocation( getWeakestEnemy().location );
+				rc.setIndicatorString(1, "Weapon ready and can see enemies. I'm shooting them.");
+			} else if (rc.isCoreReady() ){
+
+				// If there are at least as many allies as enemies nearby, move offensively,
+				// to a 'sweet spot' that is a good place to attack the weakest enemy nearby.
+				// Move defensively otherwise, in a direction that maximizes the distance to
+				// the closest enemy.
+
+				if ( readings.allies.size() >= readings.enemies.size()-1 ){
+					moveOffensively( getClosestEnemy() );
+					rc.setIndicatorString(1, "Moving offensively.");
+				} else {
+					moveDefensively( getClosestEnemy() );
+					rc.setIndicatorString(1, "Moving defensively.");
+					teamGoals.callForHelp( rc, readings.allies.size() );
+				}
+			}
+
+		} else {
+			rc.setIndicatorString(1, "No enemies to fight.");
 		}
 	}
 
@@ -169,7 +213,12 @@ public class Soldier extends BasicRobot {
 			}
 		}
 		
-		RobotInfo[] candidatesArray = candidates.toArray( new RobotInfo[ candidates.size() ] ); 
+		RobotInfo[] candidatesArray = candidates.toArray( new RobotInfo[ candidates.size() ] );
+		if ( candidatesArray!=null && candidatesArray.length > 0 ) {
+			rc.setIndicatorString( 1 , "There are candidate weakest enemies.");
+		} else {
+			rc.setIndicatorString( 1 , "No candidate weakest enemy.");
+		}
 		return findWeakestRobot( candidatesArray );
 	}
 
@@ -184,7 +233,12 @@ public class Soldier extends BasicRobot {
 				candidates.add( readings.enemies.get(i) );
 			}
 		}
-		RobotInfo[] candidatesArray = candidates.toArray( new RobotInfo[ candidates.size() ] ); 
+		RobotInfo[] candidatesArray = candidates.toArray( new RobotInfo[ candidates.size() ] );
+		if ( candidatesArray!=null && candidatesArray.length > 0 ) {
+			rc.setIndicatorString( 1 , "There are candidate closest enemies.");
+		} else {
+			rc.setIndicatorString( 1 , "No candidate closest enemies.");
+		}
 		return findClosestRobot( candidatesArray );
 	}
 	

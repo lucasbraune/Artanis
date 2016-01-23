@@ -101,7 +101,7 @@ class BasicRobot {
 		}
 		
 		if ( !moved && rc.getType() == RobotType.ARCHON ) {
-			teamGoals.askToClearTheWay( rc );
+			teamGoals.askToClearTheWay( rc, (int) Math.max( (double) -patience , 0) );
 		}
 	}
 
@@ -204,8 +204,9 @@ class BasicRobot {
 	//////////////////////// Begin utility methods /////////////////////////
 	////////////////////////////////////////////////////////////////////////
 
-	Direction randomDirection() {
-		Random rnd = new Random( rc.getID() );
+	Direction randomDirection( ) {
+		Random rnd = new Random( rc.getRoundNum() );
+		rc.setIndicatorString(3, "" + (int)(rnd.nextDouble()*8));
 		return Direction.values()[(int)(rnd.nextDouble()*8)];
 	}
 	

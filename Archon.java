@@ -27,7 +27,7 @@ public class Archon extends BasicRobot {
 				
 				RobotInfo[] enemyArray = readings.enemies.toArray( new RobotInfo[ readings.enemies.size() ] );
 				moveDefensively( findClosestRobot( enemyArray  ) );
-				teamGoals.callForHelp( rc );
+				teamGoals.callForHelp( rc, readings.allies.size() );
 				
 				if( lastGoal == PARTS && teamGoals.parts.size()>0 ) {
 					teamGoals.parts.remove();
@@ -45,13 +45,11 @@ public class Archon extends BasicRobot {
 			// If safe, build a soldier if possible
 
 			Direction dir = findDirectionToBuid();
-			if ( dir != Direction.NONE ){
+			if ( dir != Direction.NONE && rc.isCoreReady() ) {
 				rc.build( dir , RobotType.SOLDIER );
 				rc.setIndicatorString(0, "Building soldier.");
 				return;
 			}
-
-			// If there are no parts nearby, go for neutral robots
 			
 			if ( readings.neutrals.size() > 0 ) {
 				
@@ -95,7 +93,7 @@ public class Archon extends BasicRobot {
 	}
 
 	private Direction findDirectionToBuid() {
-		Direction dir = Direction.NORTH;
+		Direction dir = randomDirection();
 		int i;
 		for( i=1; i<=8; i++ ) {
 			dir.rotateLeft();
