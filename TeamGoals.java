@@ -19,14 +19,18 @@ public class TeamGoals {
 	public LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
 	public LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
 	
+	// Maximum size these lists are allowed to have
+	private static final int MAX_QUEUE_SIZE = 5;
+	
+	MapLocation stayClear = null;
+	private static final int LET_ME_MOVE = 1000;
+	
 	private boolean canSeeNewDen = false;
 	private boolean canSeeNewParts = false;
 	private boolean canSeeNewNeutrals = false;
 	
-	// Maximum size these lists are allowed to have
-	private static final int MAX_QUEUE_SIZE = 5;
-
 	// Broadcast distances (squared)
+	private static final int TINY_RADIUS = 4;
 	private static final int SMALL_RADIUS = 625;
 	
 	public void update ( Readings readings ) throws GameActionException {
@@ -56,6 +60,10 @@ public class TeamGoals {
 	
 	public void callForHelp ( RobotController rc ) throws GameActionException {
 		rc.broadcastSignal( SMALL_RADIUS );
+	}
+	
+	void askToClearTheWay( RobotController rc ) throws GameActionException {
+		rc.broadcastMessageSignal( LET_ME_MOVE, 0, TINY_RADIUS);
 	}
 	
 	// Tries to add a den to the goals. Returns true iff succeeds.
@@ -188,9 +196,13 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 
 		LinkedList<Signal> fromSoldiers = new LinkedList<Signal>();
 
+		stayClear = null;
+		
 		for ( Signal beep : signals ) {
 			if ( beep.getMessage() == null ) {
 				fromSoldiers.add( beep );
+			} else if ( beep.getMessage()[0] == LET_ME_MOVE ){
+				stayClear = beep.getLocation();
 			}
 		}
 

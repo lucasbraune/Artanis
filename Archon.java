@@ -12,7 +12,7 @@ public class Archon extends BasicRobot {
 	private int lastGoal = 0;
 	private static final int NEUTRAL_ROBOTS = 1;
 	private static final int PARTS = 2;
-	
+
 	void repeat() throws GameActionException {
 
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
@@ -24,7 +24,9 @@ public class Archon extends BasicRobot {
 			// Run if need be
 			
 			if ( readings.enemies.size() > 0 ) {
-				moveDefensively( findClosestRobot( (RobotInfo[]) readings.enemies.toArray() ) );
+				
+				RobotInfo[] enemyArray = readings.enemies.toArray( new RobotInfo[ readings.enemies.size() ] );
+				moveDefensively( findClosestRobot( enemyArray  ) );
 				teamGoals.callForHelp( rc );
 				
 				if( lastGoal == PARTS && teamGoals.parts.size()>0 ) {
@@ -52,7 +54,10 @@ public class Archon extends BasicRobot {
 			// If there are no parts nearby, go for neutral robots
 			
 			if ( readings.neutrals.size() > 0 ) {
-				RobotInfo closest = findClosestRobot( (RobotInfo[]) readings.neutrals.toArray() );
+				
+				RobotInfo[] neutralsArray = readings.neutrals.toArray( new RobotInfo[ readings.neutrals.size() ] );
+				
+				RobotInfo closest = findClosestRobot( neutralsArray );
 				if ( rc.getLocation().isAdjacentTo( closest.location ) && rc.isCoreReady() ){
 					rc.activate( closest.location );
 					rc.setIndicatorString(0, "Activating neutral robot.");
@@ -63,14 +68,20 @@ public class Archon extends BasicRobot {
 					rc.setIndicatorString(0, "Going for neutral robots nearby.");
 				}
 			} else if ( readings.parts.size() > 0 ) {
-				simpleMove( rc.getLocation().directionTo( findClosestLocation( (MapLocation[]) readings.parts.toArray() ) ) );
+				
+				MapLocation[] partsArray = readings.parts.toArray( new MapLocation[ readings.parts.size() ] );
+				
+				simpleMove( rc.getLocation().directionTo( findClosestLocation( partsArray ) ) );
 				rc.setIndicatorString(0, "Going for parts nearby.");
 				return;
 			} else if ( !teamGoals.neutralRobots.isEmpty() || !teamGoals.parts.isEmpty() ) {
 				LinkedList<MapLocation> targetLocations = new LinkedList<MapLocation>();
 				targetLocations = teamGoals.neutralRobots;
 				targetLocations.addAll( teamGoals.parts );
-				MapLocation closestLocation = findClosestLocation ( (MapLocation[]) targetLocations.toArray() );
+				
+				MapLocation[] targetLocationsArray = targetLocations.toArray( new MapLocation[ targetLocations.size() ] ); 
+				
+				MapLocation closestLocation = findClosestLocation ( targetLocationsArray );
 				simpleMove( rc.getLocation().directionTo( closestLocation ) );
 				rc.setIndicatorString(0, "Going to a known neutral robot or parts location.");
 				return;

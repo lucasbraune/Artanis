@@ -9,9 +9,9 @@ public class Soldier extends BasicRobot {
 		super(rcIn);
 	}
 
-	// Soldier will flee if infected and has less life than 
-	// INFECTED_THRESHOLD times its total life.
-	private  final double INFECTED_THRESHOLD = 0.5;
+	// Soldier will flee if infected and has less than 
+	// INFECTED_THRESHOLD of its total life.
+	private  final double INFECTED_THRESHOLD = 0.7;
 
 	// For scouting
 	private  int timeGoingOneWay = 0;
@@ -20,21 +20,26 @@ public class Soldier extends BasicRobot {
 
 	void repeat() throws GameActionException {
 		
+		if ( teamGoals.stayClear != null && rc.isCoreReady() ) {
+			simpleMove( rc.getLocation().directionTo( teamGoals.stayClear ).opposite() );
+		}
+		
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
-		teamGoals.update( readings );
-		teamGoals.transmitNewGoal( rc );
 		
 		if ( readings.enemies.size() > 0 ) {
 			fight();
 			return;
 		}
 		
-		if ( !teamGoals.archonsInDanger.isEmpty() ) {
+		teamGoals.update( readings );
+		teamGoals.transmitNewGoal( rc );
+		
+		if ( !teamGoals.archonsInDanger.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.archonsInDanger.element().getLocation() ) );
 			return;
 		} 
 
-		if ( !teamGoals.soldiersInDanger.isEmpty() ) {
+		if ( !teamGoals.soldiersInDanger.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.soldiersInDanger.element().getLocation() ) );
 			return;
 		} 
@@ -43,7 +48,7 @@ public class Soldier extends BasicRobot {
 		if ( readings.dens.size() > 0 ){
 			fight();
 			return;
-		} else if ( !teamGoals.zombieDens.isEmpty() ) {
+		} else if ( !teamGoals.zombieDens.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.zombieDens.element() ) );
 			return;
 		}
@@ -163,7 +168,9 @@ public class Soldier extends BasicRobot {
 				candidates.add( readings.enemies.get(i) );
 			}
 		}
-		return findWeakestRobot( (RobotInfo[]) candidates.toArray() );
+		
+		RobotInfo[] candidatesArray = candidates.toArray( new RobotInfo[ candidates.size() ] ); 
+		return findWeakestRobot( candidatesArray );
 	}
 
 	public  RobotInfo getClosestEnemy() {
@@ -177,7 +184,8 @@ public class Soldier extends BasicRobot {
 				candidates.add( readings.enemies.get(i) );
 			}
 		}
-		return findClosestRobot( (RobotInfo[]) candidates.toArray() );
+		RobotInfo[] candidatesArray = candidates.toArray( new RobotInfo[ candidates.size() ] ); 
+		return findClosestRobot( candidatesArray );
 	}
 	
 }

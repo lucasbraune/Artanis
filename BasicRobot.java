@@ -99,6 +99,10 @@ class BasicRobot {
 				increasePatience();
 			}
 		}
+		
+		if ( !moved && rc.getType() == RobotType.ARCHON ) {
+			teamGoals.askToClearTheWay( rc );
+		}
 	}
 
 
@@ -190,7 +194,7 @@ class BasicRobot {
 		}
 		
 		if ( bestDirection == null ) {
-			return;
+			simpleMove( myLocation.directionTo( enemy.location ).opposite() );
 		} else {
 			simpleMove( bestDirection );
 		}
@@ -200,9 +204,8 @@ class BasicRobot {
 	//////////////////////// Begin utility methods /////////////////////////
 	////////////////////////////////////////////////////////////////////////
 
-	private Random rnd = new Random ( rc.getID() );
-
 	Direction randomDirection() {
+		Random rnd = new Random( rc.getID() );
 		return Direction.values()[(int)(rnd.nextDouble()*8)];
 	}
 	

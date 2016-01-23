@@ -19,6 +19,7 @@ public class Readings {
 	public ArrayList<RobotInfo> enemies = new ArrayList<RobotInfo>();
 	public ArrayList<RobotInfo> allies = new ArrayList<RobotInfo>();
 	public ArrayList<RobotInfo> enemiesInRange = new ArrayList<RobotInfo>();
+	
 
 	// Zombie dens
 	public ArrayList<RobotInfo> dens = new ArrayList<RobotInfo>();
@@ -47,6 +48,9 @@ public class Readings {
 				allies.add( robots[i] );
 			} else if ( robots[i].team == myTeam.opponent() ){
 				enemies.add( robots[i] );
+				if( myLocation.distanceSquaredTo( robots[i].location ) <= myType.attackRadiusSquared ) {
+					enemiesInRange.add( robots[i] );
+				}
 			} else if ( robots[i].team == Team.ZOMBIE ){
 				if ( robots[i].type == RobotType.ZOMBIEDEN ) {
 					dens.add( robots[i] );
@@ -57,12 +61,6 @@ public class Readings {
 				neutrals.add( robots[i] );
 			} 
 			
-		}
-		
-		for( RobotInfo enemy : enemies ){
-			if (  myLocation.distanceSquaredTo( enemy.location ) <= myType.attackRadiusSquared ) {
-				enemiesInRange.add( enemy );
-			}
 		}
 		
 		// Update parts
