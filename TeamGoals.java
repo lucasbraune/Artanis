@@ -3,9 +3,9 @@ package artanis;
 import java.util.*;
 import battlecode.common.*;
 
-public class Goals {
+public class TeamGoals {
 	
-	public Goals ( RobotType type ){
+	public TeamGoals ( RobotType type ){
 		myType = type;
 	}
 	
@@ -23,12 +23,11 @@ public class Goals {
 	private boolean canSeeNewParts = false;
 	private boolean canSeeNewNeutrals = false;
 	
-		// Maximum size these lists are allowed to have
+	// Maximum size these lists are allowed to have
 	private static final int MAX_QUEUE_SIZE = 5;
 
 	// Broadcast distances (squared)
 	private static final int SMALL_RADIUS = 625;
-	private static final int MEDIUM_RADIUS = 900;
 	
 	public void update ( Readings readings ) throws GameActionException {
 		myLocation = readings.myLocation;

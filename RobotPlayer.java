@@ -4,27 +4,20 @@ import battlecode.common.*;
 
 public class RobotPlayer {
 	
-	// variables used in Movement.java and Communication.java
-	public static RobotController rc; 
-	private static Signal[] signalQueue;
-	private static Direction myDirection;
-
-	public static void run(RobotController rcIn){
+		public static void run(RobotController rcIn){
 		
-		rc = rcIn;
-
-		RobotType myType = rc.getType();
+		RobotType myType = rcIn.getType();
 		
 		if( myType == RobotType.ARCHON ) {
-			Archon.code( );
+			new Archon( rcIn ).code();
 		} else if( myType == RobotType.SCOUT ) {
-			Soldier.code( );
+			new Soldier( rcIn ).code( );
 		} else if( myType == RobotType.SOLDIER ) {
-			Soldier.code( );
+			new Soldier( rcIn ).code( );
 		} if( myType == RobotType.GUARD ) {
-			Soldier.code( );
+			new Soldier( rcIn ).code( );
 		} else if( myType == RobotType.VIPER ) {
-			Soldier.code( );
+			new Soldier( rcIn ).code( );
 		}
 	}
 }
