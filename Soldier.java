@@ -27,7 +27,7 @@ public class Soldier extends BasicRobot {
 		rc.setIndicatorString(0, "");
 		rc.setIndicatorString(1, "");
 		
-		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
+		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue());
 		
 		if ( readings.enemies.size() > 0 ) {
 			rc.setIndicatorString(0, "SOLDIER AI: Fighting." );
@@ -61,12 +61,6 @@ public class Soldier extends BasicRobot {
 				return;
 			}
 		}
-		
-		if ( !teamGoals.archonsInDanger.isEmpty() && rc.isCoreReady() ) {
-			simpleMove( rc.getLocation().directionTo( teamGoals.archonsInDanger.element().getLocation() ) );
-			rc.setIndicatorString(0, "SOLDIER AI: Going to help an archon." );
-			return;
-		} 
 		
 		if ( !teamGoals.soldiersInDanger.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.soldiersInDanger.element().getLocation() ) );
