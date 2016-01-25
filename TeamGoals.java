@@ -27,11 +27,33 @@ public class TeamGoals {
 		
 	// A message signal with first coordinate equal to 1001 means
 	// "here is a zombie den", and so on
+	private static final int LET_ME_MOVE = 1000;
 	private static final int HERE_IS_A_DEN = 1001;
 	private static final int HERE_IS_A_NEUTRAL = 1002;
 	private static final int HERE_ARE_PARTS = 1003;
 	private static final int WHERE_ARE_THE_RESOURCES = 1004;
 	private static final int TARGET_LOCATION = 1004;
+	
+	MapLocation stayClear = null;
+	MapLocation targetLocation = null;
+	
+	// Broadcast distances (squared)
+	private static final int TINY_RADIUS = 4;
+	private static final int SMALLER_RADIUS = 4*RobotType.SOLDIER.sensorRadiusSquared;
+	private static final int SMALL_RADIUS = 625;
+	
+	public void update ( Readings readings ) throws GameActionException {
+		myLocation = readings.myLocation;
+		
+		goalsFromSignals( readings.signals );
+		haveAsked = false;
+		
+		goalsFromDenReadings( readings.dens );
+		goalsFromPartReadings( readings.parts );
+		goalsFromNeutralReadings( readings.neutrals );
+		
+		removeCompletedGoals( readings );
+	}
 	
 	// Someone asked
 	private boolean someoneAsked_Dens = false;
@@ -39,118 +61,121 @@ public class TeamGoals {
 	private MapLocation askerLocation_Dens = null;
 	private MapLocation askerLocation_Resources = null;
 	
-	MapLocation stayClear = null;
-	MapLocation targetLocation = null;
-	
-	// A message signal with first coordinate equal to 1000 means "Let me move!"
-	private static final int LET_ME_MOVE = 1000;
-	
-	private boolean canSeeNewDen = false;
-	private boolean canSeeNewParts = false;
-	private boolean canSeeNewNeutrals = false;
-	
-	// Broadcast distances (squared)
-	private static final int TINY_RADIUS = 4;
-	private static final int SMALLER_RADIUS = 4*RobotType.SOLDIER.attackRadiusSquared;
-	private static final int SMALL_RADIUS = 625;
-	
-	public void update ( Readings readings ) throws GameActionException {
-		myLocation = readings.myLocation;
-		
-		getNewGoalsFrom( readings.signals );
-		canSeeNewDen = checkForNewDen( readings.dens );
-		canSeeNewParts = checkForNewParts( readings.parts );
-		canSeeNewNeutrals = checkForNewNeutrals( readings.neutrals );
-		removeCompletedGoals( readings );
+	void replyWithDensAndResources( RobotController rc, Readings readings ) throws GameActionException {
+		int radiusSquared;
+		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
+			if ( someoneAsked_Dens && !zombieDens.isEmpty() ) {
+				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Dens );
+				broadcastLocation( rc, zombieDens.getLast(), HERE_IS_A_DEN, radiusSquared );
+			}
+			if ( someoneAsked_Resources ) {
+				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Resources );
+				if ( !parts.isEmpty() )
+					broadcastLocation( rc, parts.getLast(), HERE_ARE_PARTS, radiusSquared );
+				if ( !neutralRobots.isEmpty() ) 
+					broadcastLocation( rc, neutralRobots.getLast(), HERE_IS_A_NEUTRAL, radiusSquared );
+			}
+		} else {
+			if ( someoneAsked_Dens && readings.dens.size() > 0 ) {
+				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Dens );
+				rc.broadcastSignal( SMALL_RADIUS );
+				rc.broadcastSignal( SMALL_RADIUS );
+			} else if (someoneAsked_Resources && ( readings.neutrals.size()>0 || readings.parts.size()>0 ) ) {
+				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Resources );
+				rc.broadcastSignal( SMALL_RADIUS );
+				rc.broadcastSignal( SMALL_RADIUS );
+			}
+		}
+		someoneAsked_Dens = false;
+		someoneAsked_Resources =false;
 	}
-	
-	public void transmitNewGoal ( RobotController rc ) throws GameActionException {
-		if ( canSeeNewDen ) {
-			rc.broadcastSignal( SMALL_RADIUS );
-			rc.broadcastSignal( SMALL_RADIUS );
-		} else if ( canSeeNewParts ) {
-			rc.broadcastSignal( SMALL_RADIUS );
-			rc.broadcastSignal( SMALL_RADIUS );
-			rc.broadcastSignal( SMALL_RADIUS );
-		} else if ( canSeeNewNeutrals ) {
-			rc.broadcastSignal( SMALL_RADIUS );
-			rc.broadcastSignal( SMALL_RADIUS );
-			rc.broadcastSignal( SMALL_RADIUS );
-			rc.broadcastSignal( SMALL_RADIUS );
+
+
+	public void callForHelp ( RobotController rc, int allies ) throws GameActionException {
+		if( !haveAsked ) {
+			rc.broadcastSignal( SMALL_RADIUS + allies*allies );
 		}
 	}
 	
-	public void callForHelp ( RobotController rc ) throws GameActionException {
+	public void askForDenLocation ( RobotController rc ) throws GameActionException {
 		rc.broadcastSignal( SMALL_RADIUS );
+		rc.broadcastSignal( SMALL_RADIUS );
+		rc.broadcastSignal( SMALL_RADIUS );
+		haveAsked = true;
 	}
 	
-	public void callForHelp ( RobotController rc, int allies ) throws GameActionException {
-		rc.broadcastSignal( SMALL_RADIUS + allies*allies );
+	public void askForResourceLocations ( RobotController rc ) throws GameActionException {
+		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
+			rc.broadcastMessageSignal( WHERE_ARE_THE_RESOURCES, 0, SMALL_RADIUS );
+			haveAsked = true;
+		}
 	}
-	
-	void askToClearTheWay( RobotController rc ) throws GameActionException {
-		rc.broadcastMessageSignal( LET_ME_MOVE, 0, TINY_RADIUS);
+
+	void askToClearTheWay( RobotController rc, int patience ) throws GameActionException {
+		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
+			rc.broadcastMessageSignal( LET_ME_MOVE, 0, TINY_RADIUS + patience*patience );
+		}
 	}
-	
-	void askToClearTheWay( RobotController rc, int radius ) throws GameActionException {
-		rc.broadcastMessageSignal( LET_ME_MOVE, 0, TINY_RADIUS + radius*radius);
-	}
+
+	//////////////////////////////////////////////////////////////////////////
+	///////////// Get goals form dens, parts and neutrals nearby /////////////
+	//////////////////////////////////////////////////////////////////////////
 	
 	// Tries to add a den to the goals. Returns true iff succeeds.
-	private boolean checkForNewDen ( ArrayList<RobotInfo> dens ) throws GameActionException {
-		
+	private boolean goalsFromDenReadings ( ArrayList<RobotInfo> dens ) throws GameActionException {
+
 		if ( dens.size() > 0 ) {
-			// Check if the given den location is was already knonw
+			// Check if the given den location is was already known
 			boolean oldDen = false;
 			Iterator<MapLocation> iterator = zombieDens.iterator();
 			while( iterator.hasNext() ){
-				if( dens.get(0).location.distanceSquaredTo( iterator.next() ) <= myType.sensorRadiusSquared ) {
+				if( dens.get(0).location.distanceSquaredTo( iterator.next() ) <= SMALLER_RADIUS ) {
 					oldDen = true;
 					break;
 				}
 			}
-			
+
 			// If not, add it to the set of goals.
 			if( !oldDen ) {
 				zombieDens.add( dens.get(0).location );
 				return true;
 			}
 		}
-		
+
 		return false;
 	}
-	
-private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throws GameActionException {
-		
+
+	private boolean goalsFromPartReadings ( ArrayList<MapLocation> partsLocations ) throws GameActionException {
+
 		if ( partsLocations.size() > 0 ) {
 			// Check if the given den location is was already knonw
 			boolean oldParts = false;
 			Iterator<MapLocation> iterator = parts.iterator();
 			while( iterator.hasNext() ){
-				if( partsLocations.get(0).distanceSquaredTo( iterator.next() ) <= myType.sensorRadiusSquared ) {
+				if( partsLocations.get(0).distanceSquaredTo( iterator.next() ) <= SMALLER_RADIUS ) {
 					oldParts = true;
 					break;
 				}
 			}
-			
+
 			// If not, add it to the set of goals.
 			if( !oldParts ) {
 				parts.add( partsLocations.get(0) );
 				return true;
 			}
 		}
-		
+
 		return false;
 	}
 	
-	private boolean checkForNewNeutrals ( ArrayList<RobotInfo> neutrals ) throws GameActionException {
+	private boolean goalsFromNeutralReadings ( ArrayList<RobotInfo> neutrals ) throws GameActionException {
 		
 		if ( neutrals.size() > 0 ) {
 			// Check if the given den location is was already knonw
 			boolean oldDen = false;
 			Iterator<MapLocation> iterator = neutralRobots.iterator();
 			while( iterator.hasNext() ){
-				if( neutrals.get(0).location.distanceSquaredTo( iterator.next() ) <= myType.sensorRadiusSquared ) {
+				if( neutrals.get(0).location.distanceSquaredTo( iterator.next() ) <= SMALLER_RADIUS ) {
 					oldDen = true;
 					break;
 				}
@@ -165,8 +190,12 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 		
 		return false;
 	}
-	
 
+	////////////////////////////////////////////////////////////////////////////
+	/////// Methods that checks if goals were completed and removes them /////// 
+	////////////////////////////////////////////////////////////////////////////
+	
+	
 	private void removeCompletedGoals( Readings readings ) {
 		
 		// If I am in attacking range of the distress signal of a soldier
@@ -177,7 +206,7 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 			
 			Iterator<Signal> iterator1 = soldiersInDanger.iterator();
 			while( iterator1.hasNext() ){
-				if( myLocation.distanceSquaredTo( iterator1.next().getLocation() ) <= myType.attackRadiusSquared ) {
+				if( myLocation.distanceSquaredTo( iterator1.next().getLocation() ) <= RobotType.SOLDIER.attackRadiusSquared ) {
 					iterator1.remove();
 				}
 			}
@@ -185,13 +214,13 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 			if ( readings.dens.size() == 0 ){
 				Iterator<MapLocation> iterator2 = zombieDens.iterator();
 				while( iterator2.hasNext() ){
-					if( myLocation.distanceSquaredTo( iterator2.next() ) <= myType.attackRadiusSquared ) {
+					if( myLocation.distanceSquaredTo( iterator2.next() ) <= RobotType.SOLDIER.attackRadiusSquared ) {
 						iterator2.remove();
 					}
 				}
 			}
 			
-			if ( readings.parts.size() == 0 && myType == RobotType.ARCHON ){
+			if ( readings.parts.size() == 0 ){
 				Iterator<MapLocation> iterator3 = parts.iterator();
 				while( iterator3.hasNext() ){
 					if( myLocation.distanceSquaredTo( iterator3.next() ) <= RobotType.SOLDIER.attackRadiusSquared ) {
@@ -200,7 +229,7 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 				}
 			}
 			
-			if ( readings.neutrals.size() == 0 && myType == RobotType.ARCHON ){
+			if ( readings.neutrals.size() == 0 ){
 				Iterator<MapLocation> iterator4 = neutralRobots.iterator();
 				while( iterator4.hasNext() ){
 					if( myLocation.distanceSquaredTo( iterator4.next() ) <= RobotType.SOLDIER.attackRadiusSquared ) {
@@ -212,7 +241,11 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 		}
 	}
 	
-	public void getNewGoalsFrom ( LinkedList<Signal> signalQueue ) {
+	////////////////////////////////////////////////////////////////////////
+	//////////////////////// Get goals from signals ////////////////////////
+	////////////////////////////////////////////////////////////////////////
+	
+	public void goalsFromSignals ( LinkedList<Signal> signalQueue ) {
 
 		// Separate signals and message signals
 
@@ -248,7 +281,7 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 				processCallForHelp( beep.signal );
 				break;
 			case 2:
-				processReply( beep.signal );
+				processSignalReply( beep.signal );
 				break;
 			case 3:
 				// Three signals is a den location request.
@@ -262,7 +295,7 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 		
 		// Now process message Signals
 		int message;
-		int[] displacement = new int[2];
+		
 		for ( Signal beep : messageSignals ) {
 			message = beep.getMessage()[0];
 			if ( message == LET_ME_MOVE ) {
@@ -271,32 +304,14 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 				someoneAsked_Resources = true;
 				askerLocation_Resources = beep.getLocation();
 			} else if ( message == TARGET_LOCATION ) {
-				displacement = integerToPosition( beep.getMessage()[1] );
-				targetLocation = beep.getLocation().add( displacement[0], displacement[1] );
+				targetLocation = messageSignalToLocation( beep );
+			} else {
+				processMessageSignalReply( beep );
 			}
 		}
 		
 	}
 	
-	// Encodes a pair of integers between -100 and 100 
-	// into a single integer.
-	public static int positionToInteger ( int[] v ) {
-		int a, b;
-		a = v[0]+100;
-		b = (v[1]+100)*1000;
-		return b+a;
-	}
-
-	// Decodes an integer into the corresponding pair of integers
-	public static int[] integerToPosition ( int n ) {
-		int[] v = new int[2];  
-		v[0] = (n % 1000);
-		v[1] = (n-v[0])/1000;
-		v[0] = v[0]-100;
-		v[1] = v[1]-100;
-		return v;
-	}
-		
 	private void processCallForHelp( Signal beep ) {
 		// Erase earlier calls for help from the same soldier
 		Iterator<Signal> iterator = soldiersInDanger.iterator();
@@ -311,41 +326,61 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 			soldiersInDanger.remove();
 		}
 	}
-
-	public boolean haveAsked = false;
 	
 	// Archons ask about the locations of parts and neutral robots.
 	// When archons get a reply, they don't know if its the location of
 	// parts or of a neutral robot. To be safe it places the location
 	// received in the lower priority list of part locations.
-	
 	// All other units ask about the locations of zombie dens.
+	// The haveAsked field is important for when a soldier receives a
+	// reply it only adds to the list of zombie den locations
+	// if it has asked the question. Because otherwise the signal
+	// is likely giving an archon the location of parts, which we
+	// don't want in the zombie dens list.
 	
-	private void processReply( Signal beep ) {
+	public boolean haveAsked = false;
+	
+	private void processSignalReply( Signal beep ) {
+		MapLocation signalOrigin = beep.getLocation();
 		if ( haveAsked ) {
 			if ( myType == RobotType.ARCHON ) {
-				Iterator<MapLocation> iterator = parts.iterator();
-				while( iterator.hasNext() ){
-					if( iterator.next().distanceSquaredTo( beep.getLocation() ) <= SMALLER_RADIUS  ) {
-						iterator.remove();
-					}
-				}
-				parts.add( beep.getLocation() );
-				if( parts.size() > MAX_QUEUE_SIZE ) {
-					parts.remove();
-				}
+				addLocation( signalOrigin, parts );
 			} else {
-				Iterator<MapLocation> iterator2 = zombieDens.iterator();
-				while( iterator2.hasNext() ){
-					if( iterator2.next().distanceSquaredTo( beep.getLocation() ) <= SMALLER_RADIUS  ) {
-						iterator2.remove();
-					}
-				}
-				zombieDens.add( beep.getLocation() );
-				if( zombieDens.size() > MAX_QUEUE_SIZE ) {
-					zombieDens.remove();
-				}
+				addLocation( signalOrigin, zombieDens );
 			}
+		}
+		// If someone asked for dens or resource locations
+		// and they also got this signal, there is no reason for
+		// me to reply to them.
+		if ( someoneAsked_Dens && askerLocation_Dens.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS / 4 )
+			someoneAsked_Dens = false;
+		if ( someoneAsked_Dens && askerLocation_Dens.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS / 4 )
+			someoneAsked_Resources = false;
+	}
+	
+	private void processMessageSignalReply( Signal beep ){
+		int[] message = beep.getMessage();
+		if ( message != null && message.length >= 2 ) {
+			if ( message[0] == HERE_ARE_PARTS ) {
+				addLocation( messageSignalToLocation( beep ), parts );
+			} else if ( message[0] == HERE_IS_A_NEUTRAL ){
+				addLocation( messageSignalToLocation( beep ), neutralRobots );
+			} else if ( message[0] == HERE_IS_A_DEN ){
+				addLocation( messageSignalToLocation( beep ), zombieDens );
+			}
+		} 
+	}
+	
+	void addLocation( MapLocation newLocation, LinkedList<MapLocation> list ) {
+		Iterator<MapLocation> iterator = list.iterator();
+		while( iterator.hasNext() ){
+			if( iterator.next().distanceSquaredTo( newLocation ) <= SMALLER_RADIUS  ) {
+				iterator.remove();
+			}
+		}
+		list.add( newLocation );
+		if( parts.size() > MAX_QUEUE_SIZE ) {
+			parts.remove();
 		}
 	}
 	
@@ -379,6 +414,48 @@ private boolean checkForNewParts ( ArrayList<MapLocation> partsLocations ) throw
 			return this.id;
 		}
 		
+	}
+	////////////////////////////////////////////////////////////////////////
+	///////////////// Turns message signals into locations /////////////////
+	////////////////////////////////////////////////////////////////////////
+	
+	// This implementation broadcasts the displacement from the archon to the
+	// target location. The displacement is encoded using the
+	// positionToInteger() method.
+	public static void broadcastLocation( RobotController rc, MapLocation location, int messageType, int broadcastRadius ) throws GameActionException {
+		int v[] = new int[2];
+		v[0] = location.x - rc.getLocation().x;
+		v[1] = location.y - rc.getLocation().y;
+		rc.broadcastMessageSignal( positionToInteger(v), messageType, broadcastRadius );
+	}
+	
+	private MapLocation messageSignalToLocation( Signal beep ) {
+		int[] message = beep.getMessage();
+		if ( message != null && message.length >= 2 ) {
+			int[] displacement = integerToPosition( beep.getMessage()[1] );
+			return beep.getLocation().add( displacement[0], displacement[1] );
+		} else {
+			return null;
+		}
+	}
+	
+	// Encodes a pair of integers between -100 and 100 
+	// into a single integer.
+	public static int positionToInteger ( int[] v ) {
+		int a, b;
+		a = v[0]+100;
+		b = (v[1]+100)*1000;
+		return b+a;
+	}
+
+	// Decodes an integer into the corresponding pair of integers
+	public static int[] integerToPosition ( int n ) {
+		int[] v = new int[2];  
+		v[0] = (n % 1000);
+		v[1] = (n-v[0])/1000;
+		v[0] = v[0]-100;
+		v[1] = v[1]-100;
+		return v;
 	}
 
 }

@@ -14,36 +14,45 @@ public class Soldier extends BasicRobot {
 	private  final double INFECTED_THRESHOLD = 0.7;
 
 	// For scouting
-	private  int timeGoingOneWay = 0;
-	private  Direction scoutingDirection = Direction.NONE;
-	private  final int MAX_TIME_ONE_WAY = 5;
+	private  Direction scoutingDirection = randomDirection();
+	private static final int DIRECTION_CHANGE_PERIOD = 7;
+	Timer directionChangeTimer = new Timer( DIRECTION_CHANGE_PERIOD );
 	
 	// Give up killing den
 	private int turnsSinceADenWasSeen = 1000;
 	private static final int DEN_MEMORY = 15;
+	
+	// Used to wait before asking the location of a den again
+	private static final int DEN_QUESTION_PERIOD = 50;
+	Timer denQuestionTimer = new Timer( DEN_QUESTION_PERIOD );
 	
 	void repeat() throws GameActionException {
 		
 		rc.setIndicatorString(0, "");
 		rc.setIndicatorString(1, "");
 		
+		// Update readings
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue());
 		
+		// Fight enemies
 		if ( readings.enemies.size() > 0 ) {
 			rc.setIndicatorString(0, "SOLDIER AI: Fighting." );
 			fight();
 			return;
 		}
 		
+		// Update goals and send two signals if near a zombie den or a resource
 		teamGoals.update( readings );
-		teamGoals.transmitNewGoal( rc );
+		teamGoals.replyWithDensAndResources( rc, readings );
 		
+		// Make way for an archon
 		if ( teamGoals.stayClear != null && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.stayClear ).opposite() );
 			rc.setIndicatorString(0, "SOLDIER AI: Making way for an archon.");
 			return;
 		}
 		
+		// Fight nearby dens
 		if ( readings.dens.size() > 0 ){
 			turnsSinceADenWasSeen = 0;
 			readings.considerDensAsEnemies();
@@ -61,38 +70,55 @@ public class Soldier extends BasicRobot {
 				return;
 			}
 		}
-		
+		// Go to soldiers in danger
 		if ( !teamGoals.soldiersInDanger.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.soldiersInDanger.element().getLocation() ) );
 			rc.setIndicatorString(0, "SOLDIER AI: Going to help a soldier." );
 			return;
 		} 
 		
-		if ( !teamGoals.zombieDens.isEmpty() && rc.isCoreReady() ) {
+		// Go to a known zombie den location. If there are none, ask for one.
+		if ( teamGoals.zombieDens.isEmpty() ) {
+			if ( !denQuestionTimer.isWaiting() ) {
+				teamGoals.askForDenLocation( rc );
+				rc.setIndicatorString(1, "SOLDIER AI: Just asked for a den location." );
+			}	
+		} else if ( rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.zombieDens.element() ) );
 			rc.setIndicatorString(0, "SOLDIER AI: Moving to a den." );
 			return;
 		}
 		
 		if ( rc.isCoreReady() ) {
-			if ( timeGoingOneWay < MAX_TIME_ONE_WAY && rc.onTheMap( rc.getLocation().add( scoutingDirection ) )) {
-				simpleMove( scoutingDirection );
-				timeGoingOneWay++;
-				rc.setIndicatorString(0, "SOLDIER AI: Scouting" );
-				return;
-			} else {
-				scoutingDirection = randomDirection();
-				simpleMove( scoutingDirection );
-				timeGoingOneWay = 0;
-				rc.setIndicatorString(0, "SOLDIER AI: Changing direction" );
-				return;
-			}
+			rc.setIndicatorString(0, "SOLDIER AI: Scouting." );
+			scout();
+			return;
 		} 
 
 		rc.setIndicatorString(0, "SOLDIER AI: Nothing to do..." );
 		return;
 
 	}
+	
+	private void scout() throws GameActionException {
+		
+		if ( directionChangeTimer.isWaiting() ) {
+			if ( rc.onTheMap( rc.getLocation().add( scoutingDirection ) ) ) {
+				simpleMove( scoutingDirection );
+			} else {
+				scoutingDirection = randomDirection();
+				simpleMove( scoutingDirection );
+				directionChangeTimer.reset();
+				rc.setIndicatorString(0, "SOLDIER AI: Scouting. Had to change direction because of the edge of the map." );
+			}
+		} else {
+			scoutingDirection = randomDirection();
+			simpleMove( scoutingDirection );
+			directionChangeTimer.reset();
+			rc.setIndicatorString(0, "SOLDIER AI: Scouting. It's time to change direction." );
+		}
+	}
+		
 
 	//////////////////////////////////////////////////////////////////////
 	/////////////// Begin attackMove() and fight() methods ///////////////

@@ -205,7 +205,7 @@ class BasicRobot {
 	////////////////////////////////////////////////////////////////////////
 
 	Direction randomDirection( ) {
-		Random rnd = new Random( rc.getRoundNum() );
+		Random rnd = new Random( rc.getRoundNum() * rc.getID() );
 		rc.setIndicatorString(3, "" + (int)(rnd.nextDouble()*8));
 		return Direction.values()[(int)(rnd.nextDouble()*8)];
 	}

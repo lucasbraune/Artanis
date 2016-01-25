@@ -17,7 +17,7 @@ public class Archon extends BasicRobot {
 
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
 		teamGoals.update( readings );
-		teamGoals.transmitNewGoal( rc );
+		teamGoals.replyWithDensAndResources( rc, readings );
 		
 		if ( rc.isCoreReady() ){
 			
@@ -38,9 +38,6 @@ public class Archon extends BasicRobot {
 				rc.setIndicatorString(0, "Fleeing from enemies.");
 				return;
 			}
-
-			teamGoals.update( readings );
-			teamGoals.transmitNewGoal( rc );
 			
 			// If safe, build a soldier if possible
 
@@ -84,7 +81,6 @@ public class Archon extends BasicRobot {
 				rc.setIndicatorString(0, "Going to a known neutral robot or parts location.");
 				return;
 			}
-
 
 			rc.setIndicatorString(0, "Nothing to do.");
 			
