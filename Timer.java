@@ -3,7 +3,7 @@ package artanis;
 public class Timer {
 	
 	Timer( int turns ) {
-		timeRemaining = 0;
+		timeRemaining = turns;
 		totalTime = turns;
 	}
 	
@@ -16,7 +16,6 @@ public class Timer {
 			timeRemaining--;
 			return true;
 		} else {
-			reset();
 			return false;
 		}
 	}

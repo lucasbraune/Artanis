@@ -77,6 +77,7 @@ public class Soldier extends BasicRobot {
 		if ( teamGoals.zombieDens.isEmpty() ) {
 			if ( !denQuestionTimer.isWaiting() ) {
 				teamGoals.askForDenLocation( rc );
+				denQuestionTimer.reset();
 				rc.setIndicatorString(1, "SOLDIER AI: Just asked for a den location." );
 			}	
 		} else if ( rc.isCoreReady() ) {
@@ -99,7 +100,7 @@ public class Soldier extends BasicRobot {
 
 	// For scouting
 	private  Direction scoutingDirection = randomDirection();
-	private static final int DIRECTION_CHANGE_PERIOD = 7;
+	private static final int DIRECTION_CHANGE_PERIOD = 4;
 	Timer directionChangeTimer = new Timer( DIRECTION_CHANGE_PERIOD );
 	
 	private void scout() throws GameActionException {
@@ -107,6 +108,7 @@ public class Soldier extends BasicRobot {
 		if ( directionChangeTimer.isWaiting() ) {
 			if ( rc.onTheMap( rc.getLocation().add( scoutingDirection ) ) ) {
 				simpleMove( scoutingDirection );
+				directionChangeTimer.reset();
 			} else {
 				scoutingDirection = randomDirection();
 				simpleMove( scoutingDirection );

@@ -12,10 +12,16 @@ public class Archon extends BasicRobot {
 	private int lastGoal = 0;
 	private static final int NEUTRAL_ROBOTS = 1;
 	private static final int PARTS = 2;
-	
-	// Used to wait before asking the location of a den again
-	private static final int RESOURCE_QUESTION_PERIOD = 150;
+
+	// Used to wait before asking the location of resources again
+	private static final int RESOURCE_QUESTION_PERIOD = 30;
 	Timer resourceQuestionTimer = new Timer( RESOURCE_QUESTION_PERIOD );
+	
+	// Used to wait before building a scout again
+	private static final int SCOUT_BUILDING_PERIOD = 200;
+	Timer scoutBuildingTimer = new Timer( SCOUT_BUILDING_PERIOD );
+	
+	RobotType typeToBeBuilt = RobotType.SCOUT; 
 
 	void repeat() throws GameActionException {
 
@@ -24,8 +30,12 @@ public class Archon extends BasicRobot {
 		rc.setIndicatorString(2, ".");
 		
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
-		teamGoals.update( readings );
-		teamGoals.replyWithDensAndResources( rc, readings );
+		
+		if( !scoutBuildingTimer.isWaiting() ) {
+			typeToBeBuilt = RobotType.SCOUT;
+			scoutBuildingTimer.reset();
+			rc.setIndicatorString(1, "The next robot build should be a scout.");
+		}
 		
 		if ( rc.isCoreReady() ){
 			
@@ -47,16 +57,25 @@ public class Archon extends BasicRobot {
 				return;
 			}
 			
-			// If safe, build a soldier if possible
-
+			// Update team goals and reply to any requests
+			teamGoals.update( readings );
+			teamGoals.replyWithDensAndResources( rc, readings );
+			if( !rc.isCoreReady() ) {
+				return;
+			}
+			
+			// If safe, build a robot if possible. 
+			
 			Direction dir = findDirectionToBuid();
 			if ( dir != Direction.NONE && rc.isCoreReady() ) {
-				rc.build( dir , RobotType.SOLDIER );
-				rc.setIndicatorString(0, "Building soldier.");
+				rc.build( dir, typeToBeBuilt );
+				typeToBeBuilt = RobotType.SOLDIER;
+				rc.setIndicatorString(0, "Building robot.");
 				return;
 			}
 			
 			if ( readings.neutrals.size() > 0 ) {
+				// Go for neutral robots nearby
 				
 				RobotInfo[] neutralsArray = readings.neutrals.toArray( new RobotInfo[ readings.neutrals.size() ] );
 				RobotInfo closest = findClosestRobot( neutralsArray );
@@ -70,14 +89,19 @@ public class Archon extends BasicRobot {
 					lastGoal = NEUTRAL_ROBOTS;
 					rc.setIndicatorString(0, "Going for neutral robots nearby.");
 				}
+				
 			} else if ( readings.parts.size() > 0 ) {
+				// Go for parts nearby
 				
 				MapLocation[] partsArray = readings.parts.toArray( new MapLocation[ readings.parts.size() ] );
 				
 				simpleMove( rc.getLocation().directionTo( findClosestLocation( partsArray ) ) );
 				rc.setIndicatorString(0, "Going for parts nearby.");
 				return;
+				
 			} else if ( !teamGoals.neutralRobots.isEmpty() || !teamGoals.parts.isEmpty() ) {
+				// Go to the nearest resource location known
+				
 				LinkedList<MapLocation> targetLocations = new LinkedList<MapLocation>();
 				targetLocations = teamGoals.neutralRobots;
 				targetLocations.addAll( teamGoals.parts );
@@ -88,8 +112,11 @@ public class Archon extends BasicRobot {
 				simpleMove( rc.getLocation().directionTo( closestLocation ) );
 				rc.setIndicatorString(0, "Going to a known neutral robot or parts location.");
 				return;
+				
 			} else if ( !resourceQuestionTimer.isWaiting() ) {
+				// Should no resource locaiton be known, ask other robots every once in a while.
 				teamGoals.askForResourceLocations(rc);
+				resourceQuestionTimer.reset();
 				rc.setIndicatorString(1, "Asking for resource location." );
 			}
 
@@ -104,7 +131,7 @@ public class Archon extends BasicRobot {
 		int i;
 		for( i=1; i<=8; i++ ) {
 			dir.rotateLeft();
-			if ( rc.canBuild( dir, RobotType.SOLDIER ) ){
+			if ( rc.canBuild( dir, typeToBeBuilt ) ){
 				break;
 			}
 		}

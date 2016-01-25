@@ -26,17 +26,18 @@ public class TeamGoals {
 	MapLocation targetLocation = null;
 		
 	// Message Meanings
-	private static final int LET_ME_MOVE = 1000;
-	private static final int HERE_IS_A_DEN = 1001;
-	private static final int HERE_IS_A_NEUTRAL = 1002;
-	private static final int HERE_ARE_PARTS = 1003;
-	private static final int WHERE_ARE_THE_RESOURCES = 1004;
-	private static final int TARGET_LOCATION = 1004;
+	static final int LET_ME_MOVE = 1000;
+	public static final int HERE_IS_A_DEN = 1001;
+	static final int HERE_IS_A_NEUTRAL = 1002;
+	static final int HERE_ARE_PARTS = 1003;
+	static final int WHERE_ARE_THE_RESOURCES = 1004;
+	static final int TARGET_LOCATION = 1004;
 	
 	// Broadcast distances (squared)
-	private static final int TINY_RADIUS = 4;
-	private static final int SMALLER_RADIUS = 4*RobotType.SOLDIER.sensorRadiusSquared;
-	private static final int SMALL_RADIUS = 625;
+	static final int TINY_RADIUS = 4;
+	static final int SMALLER_RADIUS = 4*RobotType.SOLDIER.sensorRadiusSquared;
+	static final int SMALL_RADIUS = 625;
+	static final int MEDIUM_RADIUS = 1500;
 	
 	// Used to wait before asking the location of a den again
 	private static final int RESPONSE_WAITING_PERIOD = 3;
@@ -46,6 +47,7 @@ public class TeamGoals {
 		myLocation = readings.myLocation;
 		if ( !responseTimer.isWaiting() ) {
 			haveAsked = false;
+			responseTimer.reset();
 		}
 		stayClear = null;
 		
@@ -63,35 +65,46 @@ public class TeamGoals {
 	private MapLocation askerLocation_Dens = null;
 	private MapLocation askerLocation_Resources = null;
 	
+	// Used to wait before answering a request again
+	private static final int ANSWERING_PERIOD = 10;
+	private Timer answeringTimer = new Timer( ANSWERING_PERIOD );
+	
 	void replyWithDensAndResources( RobotController rc, Readings readings ) throws GameActionException {
-		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
-			if ( someoneAsked_Dens && !zombieDens.isEmpty() ) {
-				broadcastLocation( rc, zombieDens.getLast(), HERE_IS_A_DEN, SMALL_RADIUS );
-				rc.setIndicatorString(2, "Broadcasting den location");
-			}
-			if ( someoneAsked_Resources ) {
-				if ( !parts.isEmpty() ) {
-					broadcastLocation( rc, parts.getLast(), HERE_ARE_PARTS, SMALL_RADIUS );
-					rc.setIndicatorString(2, "Broadcasting parts location");
+		if ( !answeringTimer.isWaiting() ) {
+			if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
+				if ( someoneAsked_Dens && !zombieDens.isEmpty() ) {
+					broadcastLocation( rc, zombieDens.getLast(), HERE_IS_A_DEN, MEDIUM_RADIUS );
+					answeringTimer.reset();
+					rc.setIndicatorString(2, "Broadcasting den location");
 				}
-				if ( !neutralRobots.isEmpty() ) { 
-					broadcastLocation( rc, neutralRobots.getLast(), HERE_IS_A_NEUTRAL, SMALL_RADIUS );
-					rc.setIndicatorString(2, "Broadcasting neutral robot location");
+				if ( someoneAsked_Resources ) {
+					if ( !parts.isEmpty() ) {
+						broadcastLocation( rc, parts.getLast(), HERE_ARE_PARTS, MEDIUM_RADIUS );
+						answeringTimer.reset();
+						rc.setIndicatorString(2, "Broadcasting parts location");
+					}
+					if ( !neutralRobots.isEmpty() ) { 
+						broadcastLocation( rc, neutralRobots.getLast(), HERE_IS_A_NEUTRAL, MEDIUM_RADIUS );
+						answeringTimer.reset();
+						rc.setIndicatorString(2, "Broadcasting neutral robot location");
+					}
+				}
+			} else {
+				if ( someoneAsked_Dens && readings.dens.size() > 0 ) {
+					rc.broadcastSignal( SMALL_RADIUS );
+					rc.broadcastSignal( SMALL_RADIUS );
+					answeringTimer.reset();
+					rc.setIndicatorString(2, "Broadcasting den location");
+				} else if (someoneAsked_Resources && ( readings.neutrals.size()>0 || readings.parts.size()>0 ) ) {
+					rc.broadcastSignal( MEDIUM_RADIUS );
+					rc.broadcastSignal( MEDIUM_RADIUS );
+					answeringTimer.reset();
+					rc.setIndicatorString(2, "Broadcasting resource location");
 				}
 			}
-		} else {
-			if ( someoneAsked_Dens && readings.dens.size() > 0 ) {
-				rc.broadcastSignal( SMALL_RADIUS );
-				rc.broadcastSignal( SMALL_RADIUS );
-				rc.setIndicatorString(2, "Broadcasting den location");
-			} else if (someoneAsked_Resources && ( readings.neutrals.size()>0 || readings.parts.size()>0 ) ) {
-				rc.broadcastSignal( SMALL_RADIUS );
-				rc.broadcastSignal( SMALL_RADIUS );
-				rc.setIndicatorString(2, "Broadcasting resource location");
-			}
+			someoneAsked_Dens = false;
+			someoneAsked_Resources =false;
 		}
-		someoneAsked_Dens = false;
-		someoneAsked_Resources =false;
 	}
 
 
@@ -112,7 +125,7 @@ public class TeamGoals {
 	
 	public void askForResourceLocations ( RobotController rc ) throws GameActionException {
 		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
-			rc.broadcastMessageSignal( WHERE_ARE_THE_RESOURCES, 0, SMALL_RADIUS );
+			rc.broadcastMessageSignal( WHERE_ARE_THE_RESOURCES, 0, MEDIUM_RADIUS );
 			rc.setIndicatorString(2, "Asking resource location");
 			haveAsked = true;
 		}
@@ -362,7 +375,7 @@ public class TeamGoals {
 		// me to reply to them.
 		if ( someoneAsked_Dens && askerLocation_Dens.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS )
 			someoneAsked_Dens = false;
-		if ( someoneAsked_Resources && askerLocation_Resources.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS )
+		if ( someoneAsked_Resources && askerLocation_Resources.distanceSquaredTo( signalOrigin ) <= MEDIUM_RADIUS )
 			someoneAsked_Resources = false;
 	}
 	
@@ -371,10 +384,13 @@ public class TeamGoals {
 		if ( message != null && message.length >= 2 ) {
 			if ( message[0] == HERE_ARE_PARTS ) {
 				addLocation( messageSignalToLocation( beep ), parts );
+				RobotPlayer.rc.setIndicatorString(2, "Parts location received");
 			} else if ( message[0] == HERE_IS_A_NEUTRAL ){
 				addLocation( messageSignalToLocation( beep ), neutralRobots );
+				RobotPlayer.rc.setIndicatorString(2, "Neutral Robot location received");
 			} else if ( message[0] == HERE_IS_A_DEN ){
 				addLocation( messageSignalToLocation( beep ), zombieDens );
+				RobotPlayer.rc.setIndicatorString(2, "Zombie den location received");
 			}
 		} 
 	}

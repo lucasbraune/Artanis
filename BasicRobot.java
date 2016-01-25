@@ -121,56 +121,56 @@ class BasicRobot {
 		}
 	}
 	
-	void moveAvoidingEnemies ( Direction dir, RobotInfo[] enemies ) throws GameActionException {
-		
-		if ( dir == null || dir == Direction.NONE || dir == Direction.OMNI ) {
-			return;
-		}
+	public void moveAvoidingEnemies ( Direction dir, RobotInfo[] enemies ) throws GameActionException {
+		Direction candidateDirection = dir;
+		boolean coreReady;
 
-		if ( rc.isCoreReady() ) {
+		if ( dir == null ) 
+			return;
+
+		coreReady = rc.isCoreReady();
+		if ( coreReady ) {
 
 			pastLocations.add( rc.getLocation() );
 			if (pastLocations.size() > LOCATIONS_REMEMBERED ) {
 				pastLocations.remove(0);
 			}
 
-			Direction candidateDirection;
-			MapLocation candidateLocation;
-			
 			for(int i=0; i<possibleDirections.length; i++ ){
 				candidateDirection = Direction.values()[ ( dir.ordinal() + possibleDirections[i] + 8 ) % 8 ];
-				candidateLocation = rc.getLocation().add( candidateDirection );
+				MapLocation candidateLocation = rc.getLocation().add( candidateDirection );
 
 				if( rc.canMove(candidateDirection) && !pastLocations.contains( candidateLocation )
-						&& enemiesCannotShoot( enemies, candidateLocation )){
+						&& enemiesCannotSee( enemies, candidateLocation )){
 					rc.move(candidateDirection);
+					coreReady = false;
 					break;
-				}
+				} 
 			}
-			
-			// If robot hasn't moved, it is possibly because it was afraid of enemies.
+			// If scout hasn't moved, it is possibly because it was afraid of enemies.
 			// Now it will become brave and try to move again.
-			if ( rc.isCoreReady() ) {
+			if ( coreReady ) {
 				for(int i=0; i<possibleDirections.length; i++ ){
 					candidateDirection = Direction.values()[ ( dir.ordinal() + possibleDirections[i] + 8 ) % 8 ];
-					candidateLocation = rc.getLocation().add( candidateDirection );
+					MapLocation candidateLocation = rc.getLocation().add( candidateDirection );
 
 					if( rc.canMove(candidateDirection) && !pastLocations.contains( candidateLocation ) ){
 						rc.move(candidateDirection);
+						coreReady = false;
 						break;
 					} 
 				}
 			}
-
+			
 		}
 	}
 	
-	private boolean enemiesCannotShoot(RobotInfo[] enemies, MapLocation candidateLocation) {
+	private boolean enemiesCannotSee(RobotInfo[] enemies, MapLocation candidateLocation) {
 		boolean safe = true;
 		int enemyRange;
 		for( int i=0; i<enemies.length; i++ ){
 			enemyRange = enemies[i].location.distanceSquaredTo( candidateLocation ); 
-			if( enemyRange <= RobotType.SOLDIER.attackRadiusSquared ) {
+			if( enemyRange <= RobotType.SOLDIER.sensorRadiusSquared ) {
 				safe = false;
 			}
 		}
