@@ -34,7 +34,7 @@ public class Archon extends BasicRobot {
 		if( !scoutBuildingTimer.isWaiting() ) {
 			typeToBeBuilt = RobotType.SCOUT;
 			scoutBuildingTimer.reset();
-			rc.setIndicatorString(1, "The next robot build should be a scout.");
+			rc.setIndicatorString(1, "The next robot built should be a scout.");
 		}
 		
 		if ( rc.isCoreReady() ){

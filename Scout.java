@@ -13,7 +13,7 @@ public class Scout extends BasicRobot {
 	// Used to wait before asking the location of a den again
 	private static final int GROUP_UPDATE_PERIOD = 50;
 	Timer groupUpdateTimer = new Timer( GROUP_UPDATE_PERIOD );
-
+	
 	void repeat() throws GameActionException {
 		
 		rc.setIndicatorString(0, ".");
@@ -44,20 +44,24 @@ public class Scout extends BasicRobot {
 		
 		if( rc.isCoreReady() ) {
 			rc.setIndicatorString(0, "SCOUT AI: Scouting.");
-			scout();
+			spiralScout();
 			return;
 		}
 		
 		rc.setIndicatorString(0, "Doing nothing.");
 				
 	}
+	
+	/////////////////////////////////////////////////////////////////////
+	/////////////////////// Begin random scouting ///////////////////////
+	/////////////////////////////////////////////////////////////////////
 
 	// For scouting
-	private  Direction scoutingDirection = randomDirection();
+	private Direction scoutingDirection = randomDirection();
 	private static final int DIRECTION_CHANGE_PERIOD = 30;
 	Timer directionChangeTimer = new Timer( DIRECTION_CHANGE_PERIOD );
 
-	private void scout() throws GameActionException {
+	private void randomScout() throws GameActionException {
 		RobotInfo[] enemyArray = readings.enemies.toArray( new RobotInfo[ readings.enemies.size() ] );
 		if ( directionChangeTimer.isWaiting() ) {
 			if ( rc.onTheMap( rc.getLocation().add( scoutingDirection ) ) ) {
@@ -76,6 +80,96 @@ public class Scout extends BasicRobot {
 		}
 	}
 
+	/////////////////////////////////////////////////////////////////////
+	/////////////////////// Begin spiral scouting ///////////////////////
+	/////////////////////////////////////////////////////////////////////
+	
+	private static final int RIGHT = 1;
+	private static final int UP = 2;
+	private static final int LEFT = 3;
+	private static final int DOWN = 4;
+	
+	private static int timesShouldRepeatDirection = 1;
+	private static int timesRepeatedDirection = 0;
+	private static int spiralDirection = RIGHT;
+	private static final int SPIRAL_STEPS = 7;
+	
+	private static MapLocation nextScoutingTarget ( MapLocation currentTarget ) {
+		
+		// This part of the code returns a map location that is SPIRAL_STEPS to the
+		// spiralDirection of currentTarget.
+		MapLocation nextTarget = null;
+		
+		switch( spiralDirection ) {
+		case RIGHT:
+			nextTarget = currentTarget.add( Direction.EAST, SPIRAL_STEPS );
+			break;
+		case UP:
+			nextTarget = currentTarget.add( Direction.NORTH, SPIRAL_STEPS );
+			break;
+		case LEFT:
+			nextTarget = currentTarget.add( Direction.WEST, SPIRAL_STEPS );
+			break;
+		case DOWN:
+			nextTarget = currentTarget.add( Direction.SOUTH, SPIRAL_STEPS );
+			break;
+		}
+		
+		// This part of the code changes spiralDirection following the pattern:
+		// R U LL DD RRR UUU LLLL DDDD RRRRR UUUUU ...
+		timesRepeatedDirection++;
+		if ( timesRepeatedDirection >= timesShouldRepeatDirection ) {
+			timesRepeatedDirection = 0;
+			switch( spiralDirection ) {
+			case RIGHT:
+				spiralDirection = UP;
+				break;
+			case UP:
+				spiralDirection = LEFT;
+				timesShouldRepeatDirection++;
+				break;
+			case LEFT:
+				spiralDirection = DOWN;
+				break;
+			case DOWN:
+				spiralDirection = RIGHT;
+				timesShouldRepeatDirection++;
+				break;
+			}
+		}
+		
+		return nextTarget;
+	}
+	
+	private MapLocation startingLocation;
+	private MapLocation scoutingTarget;
+	// private Direction scoutingDirection;
+	
+	// Distance, as usual, means distance squared.
+	private static final int SHORT_DISTANCE_FROM_TARGET = 20; 
+	
+	void runsOnce() {
+		startingLocation = rc.getLocation();
+		scoutingTarget = startingLocation;
+	}
+	
+	private void spiralScout() throws GameActionException {
+		RobotInfo[] enemyArray = readings.enemies.toArray( new RobotInfo[ readings.enemies.size() ] );
+		scoutingDirection = rc.getLocation().directionTo( scoutingTarget );
+		
+		if ( rc.getLocation().distanceSquaredTo( scoutingTarget ) <= SHORT_DISTANCE_FROM_TARGET  ||
+			!rc.onTheMap( rc.getLocation().add( scoutingDirection ) ) ) {
+			scoutingTarget = nextScoutingTarget( scoutingTarget );
+			rc.setIndicatorString(0, "SCOUT AI: Scouting. Changed direction." );
+		}
+		
+		moveAvoidingEnemies( scoutingDirection, enemyArray );
+		rc.setIndicatorString(0, "SCOUT AI: Scouting." );
+	}
+	
+	////////////////////////////////////////////////////////////////////
+	/////////////////////// Begin the next thing ///////////////////////
+	////////////////////////////////////////////////////////////////////
 }
 
 
