@@ -3,11 +3,15 @@ package artanis;
 import battlecode.common.*;
 
 public class RobotPlayer {
-	
-		public static void run(RobotController rcIn){
-		
+
+	// The following is sometimes used for debugging purposes
+	// public static RobotController rc; 
+
+	public static void run(RobotController rcIn){
+
+		// rc = rcIn;
 		RobotType myType = rcIn.getType();
-		
+
 		if( myType == RobotType.ARCHON ) {
 			new Archon( rcIn ).code();
 		} else if( myType == RobotType.SCOUT ) {

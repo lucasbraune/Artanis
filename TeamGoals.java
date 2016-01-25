@@ -12,21 +12,20 @@ public class TeamGoals {
 	private RobotType myType;
 	private MapLocation myLocation;
 	
-	// Soldiers keep track of soldiersInDanger and zombieDens
-	// they have seen. Archons and scouts keep track of zombieDens,
-	// neutralRobots and parts they have seen.
-	
+	// Known locations
 	public LinkedList<Signal> soldiersInDanger = new LinkedList<Signal>();
 	public LinkedList<MapLocation> zombieDens = new LinkedList<MapLocation>();
-	
 	public LinkedList<MapLocation> neutralRobots = new LinkedList<MapLocation>();
 	public LinkedList<MapLocation> parts = new LinkedList<MapLocation>();
 	
 	// Maximum size these lists are allowed to have
 	private static final int MAX_QUEUE_SIZE = 5;
+	
+	// Orders
+	MapLocation stayClear = null;
+	MapLocation targetLocation = null;
 		
-	// A message signal with first coordinate equal to 1001 means
-	// "here is a zombie den", and so on
+	// Message Meanings
 	private static final int LET_ME_MOVE = 1000;
 	private static final int HERE_IS_A_DEN = 1001;
 	private static final int HERE_IS_A_NEUTRAL = 1002;
@@ -34,20 +33,23 @@ public class TeamGoals {
 	private static final int WHERE_ARE_THE_RESOURCES = 1004;
 	private static final int TARGET_LOCATION = 1004;
 	
-	MapLocation stayClear = null;
-	MapLocation targetLocation = null;
-	
 	// Broadcast distances (squared)
 	private static final int TINY_RADIUS = 4;
 	private static final int SMALLER_RADIUS = 4*RobotType.SOLDIER.sensorRadiusSquared;
 	private static final int SMALL_RADIUS = 625;
 	
+	// Used to wait before asking the location of a den again
+	private static final int RESPONSE_WAITING_PERIOD = 3;
+	Timer responseTimer = new Timer( RESPONSE_WAITING_PERIOD );
+	
 	public void update ( Readings readings ) throws GameActionException {
 		myLocation = readings.myLocation;
+		if ( !responseTimer.isWaiting() ) {
+			haveAsked = false;
+		}
+		stayClear = null;
 		
 		goalsFromSignals( readings.signals );
-		haveAsked = false;
-		
 		goalsFromDenReadings( readings.dens );
 		goalsFromPartReadings( readings.parts );
 		goalsFromNeutralReadings( readings.neutrals );
@@ -62,28 +64,30 @@ public class TeamGoals {
 	private MapLocation askerLocation_Resources = null;
 	
 	void replyWithDensAndResources( RobotController rc, Readings readings ) throws GameActionException {
-		int radiusSquared;
 		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
 			if ( someoneAsked_Dens && !zombieDens.isEmpty() ) {
-				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Dens );
-				broadcastLocation( rc, zombieDens.getLast(), HERE_IS_A_DEN, radiusSquared );
+				broadcastLocation( rc, zombieDens.getLast(), HERE_IS_A_DEN, SMALL_RADIUS );
+				rc.setIndicatorString(2, "Broadcasting den location");
 			}
 			if ( someoneAsked_Resources ) {
-				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Resources );
-				if ( !parts.isEmpty() )
-					broadcastLocation( rc, parts.getLast(), HERE_ARE_PARTS, radiusSquared );
-				if ( !neutralRobots.isEmpty() ) 
-					broadcastLocation( rc, neutralRobots.getLast(), HERE_IS_A_NEUTRAL, radiusSquared );
+				if ( !parts.isEmpty() ) {
+					broadcastLocation( rc, parts.getLast(), HERE_ARE_PARTS, SMALL_RADIUS );
+					rc.setIndicatorString(2, "Broadcasting parts location");
+				}
+				if ( !neutralRobots.isEmpty() ) { 
+					broadcastLocation( rc, neutralRobots.getLast(), HERE_IS_A_NEUTRAL, SMALL_RADIUS );
+					rc.setIndicatorString(2, "Broadcasting neutral robot location");
+				}
 			}
 		} else {
 			if ( someoneAsked_Dens && readings.dens.size() > 0 ) {
-				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Dens );
 				rc.broadcastSignal( SMALL_RADIUS );
 				rc.broadcastSignal( SMALL_RADIUS );
+				rc.setIndicatorString(2, "Broadcasting den location");
 			} else if (someoneAsked_Resources && ( readings.neutrals.size()>0 || readings.parts.size()>0 ) ) {
-				radiusSquared = 2 * myLocation.distanceSquaredTo( askerLocation_Resources );
 				rc.broadcastSignal( SMALL_RADIUS );
 				rc.broadcastSignal( SMALL_RADIUS );
+				rc.setIndicatorString(2, "Broadcasting resource location");
 			}
 		}
 		someoneAsked_Dens = false;
@@ -94,6 +98,7 @@ public class TeamGoals {
 	public void callForHelp ( RobotController rc, int allies ) throws GameActionException {
 		if( !haveAsked ) {
 			rc.broadcastSignal( SMALL_RADIUS + allies*allies );
+			rc.setIndicatorString(2, "Calling for help");
 		}
 	}
 	
@@ -102,11 +107,13 @@ public class TeamGoals {
 		rc.broadcastSignal( SMALL_RADIUS );
 		rc.broadcastSignal( SMALL_RADIUS );
 		haveAsked = true;
+		rc.setIndicatorString(2, "Asking for den location");
 	}
 	
 	public void askForResourceLocations ( RobotController rc ) throws GameActionException {
 		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
 			rc.broadcastMessageSignal( WHERE_ARE_THE_RESOURCES, 0, SMALL_RADIUS );
+			rc.setIndicatorString(2, "Asking resource location");
 			haveAsked = true;
 		}
 	}
@@ -114,6 +121,7 @@ public class TeamGoals {
 	void askToClearTheWay( RobotController rc, int patience ) throws GameActionException {
 		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
 			rc.broadcastMessageSignal( LET_ME_MOVE, 0, TINY_RADIUS + patience*patience );
+			rc.setIndicatorString(2, "Make way for me!");
 		}
 	}
 
@@ -191,9 +199,9 @@ public class TeamGoals {
 		return false;
 	}
 
-	////////////////////////////////////////////////////////////////////////////
-	/////// Methods that checks if goals were completed and removes them /////// 
-	////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////
+	//////// Method that checks if goals were completed and removes them //////// 
+	/////////////////////////////////////////////////////////////////////////////
 	
 	
 	private void removeCompletedGoals( Readings readings ) {
@@ -352,9 +360,9 @@ public class TeamGoals {
 		// If someone asked for dens or resource locations
 		// and they also got this signal, there is no reason for
 		// me to reply to them.
-		if ( someoneAsked_Dens && askerLocation_Dens.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS / 4 )
+		if ( someoneAsked_Dens && askerLocation_Dens.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS )
 			someoneAsked_Dens = false;
-		if ( someoneAsked_Dens && askerLocation_Dens.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS / 4 )
+		if ( someoneAsked_Resources && askerLocation_Resources.distanceSquaredTo( signalOrigin ) <= SMALL_RADIUS )
 			someoneAsked_Resources = false;
 	}
 	

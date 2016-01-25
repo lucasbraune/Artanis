@@ -7,11 +7,11 @@ public class Timer {
 		totalTime = turns;
 	}
 	
-	private static int totalTime;
-	private static int timeRemaining;
+	private int totalTime;
+	private int timeRemaining;
 	
 	// This method returns true when timeRemaining <= 0.
-	boolean isWaiting() {
+	public boolean isWaiting() {
 		if ( timeRemaining > 0 ) {
 			timeRemaining--;
 			return true;
@@ -21,7 +21,7 @@ public class Timer {
 		}
 	}
 	
-	void reset() {
+	public void reset() {
 		timeRemaining = totalTime;
 	}
 }

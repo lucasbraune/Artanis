@@ -12,9 +12,17 @@ public class Archon extends BasicRobot {
 	private int lastGoal = 0;
 	private static final int NEUTRAL_ROBOTS = 1;
 	private static final int PARTS = 2;
+	
+	// Used to wait before asking the location of a den again
+	private static final int RESOURCE_QUESTION_PERIOD = 150;
+	Timer resourceQuestionTimer = new Timer( RESOURCE_QUESTION_PERIOD );
 
 	void repeat() throws GameActionException {
 
+		rc.setIndicatorString(0, ".");
+		rc.setIndicatorString(1, ".");
+		rc.setIndicatorString(2, ".");
+		
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
 		teamGoals.update( readings );
 		teamGoals.replyWithDensAndResources( rc, readings );
@@ -51,8 +59,8 @@ public class Archon extends BasicRobot {
 			if ( readings.neutrals.size() > 0 ) {
 				
 				RobotInfo[] neutralsArray = readings.neutrals.toArray( new RobotInfo[ readings.neutrals.size() ] );
-				
 				RobotInfo closest = findClosestRobot( neutralsArray );
+				
 				if ( rc.getLocation().isAdjacentTo( closest.location ) && rc.isCoreReady() ){
 					rc.activate( closest.location );
 					rc.setIndicatorString(0, "Activating neutral robot.");
@@ -80,6 +88,9 @@ public class Archon extends BasicRobot {
 				simpleMove( rc.getLocation().directionTo( closestLocation ) );
 				rc.setIndicatorString(0, "Going to a known neutral robot or parts location.");
 				return;
+			} else if ( !resourceQuestionTimer.isWaiting() ) {
+				teamGoals.askForResourceLocations(rc);
+				rc.setIndicatorString(1, "Asking for resource location." );
 			}
 
 			rc.setIndicatorString(0, "Nothing to do.");
@@ -87,7 +98,7 @@ public class Archon extends BasicRobot {
 		}
 		
 	}
-
+	
 	private Direction findDirectionToBuid() {
 		Direction dir = randomDirection();
 		int i;

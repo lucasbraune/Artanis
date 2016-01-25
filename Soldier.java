@@ -5,19 +5,14 @@ import battlecode.common.*;
 
 public class Soldier extends BasicRobot {
 
-	Soldier(RobotController rcIn) {
+	Soldier( RobotController rcIn ) {
 		super(rcIn);
 	}
 
 	// Soldier will flee if infected and has less than 
-	// INFECTED_THRESHOLD of its total life.
+	// a certain portion of its total life.
 	private  final double INFECTED_THRESHOLD = 0.7;
 
-	// For scouting
-	private  Direction scoutingDirection = randomDirection();
-	private static final int DIRECTION_CHANGE_PERIOD = 7;
-	Timer directionChangeTimer = new Timer( DIRECTION_CHANGE_PERIOD );
-	
 	// Give up killing den
 	private int turnsSinceADenWasSeen = 1000;
 	private static final int DEN_MEMORY = 15;
@@ -28,8 +23,9 @@ public class Soldier extends BasicRobot {
 	
 	void repeat() throws GameActionException {
 		
-		rc.setIndicatorString(0, "");
-		rc.setIndicatorString(1, "");
+		rc.setIndicatorString(0, ".");
+		rc.setIndicatorString(1, ".");
+		rc.setIndicatorString(2, ".");
 		
 		// Update readings
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue());
@@ -89,16 +85,22 @@ public class Soldier extends BasicRobot {
 			return;
 		}
 		
+		// Scout
 		if ( rc.isCoreReady() ) {
 			rc.setIndicatorString(0, "SOLDIER AI: Scouting." );
 			scout();
 			return;
 		} 
 
-		rc.setIndicatorString(0, "SOLDIER AI: Nothing to do..." );
+		rc.setIndicatorString(0, "SOLDIER AI: Nothing to do." );
 		return;
 
 	}
+
+	// For scouting
+	private  Direction scoutingDirection = randomDirection();
+	private static final int DIRECTION_CHANGE_PERIOD = 7;
+	Timer directionChangeTimer = new Timer( DIRECTION_CHANGE_PERIOD );
 	
 	private void scout() throws GameActionException {
 		

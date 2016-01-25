@@ -31,6 +31,8 @@ public class Readings {
 	// Signals
 	public LinkedList<Signal> signals = new LinkedList<Signal>();
 	
+	private static final int SIGNAL_QUEUE_LENGTH = 100; 
+	
 	public void update( MapLocation myLoc, RobotInfo[] robots, MapLocation[] partLocations, Signal[] signalQueue ) {
 		// update myLocation
 		myLocation = myLoc;
@@ -79,7 +81,7 @@ public class Readings {
 		
 		// Update signals
 		signals.clear();
-		for( int i=0; i<signalQueue.length; i++ ) {
+		for( int i=0; i<signalQueue.length && i< SIGNAL_QUEUE_LENGTH; i++ ) {
 			if ( signalQueue[i].getTeam() == myTeam )
 				signals.add( signalQueue[i] );
 		}
