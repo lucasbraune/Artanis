@@ -21,7 +21,7 @@ public class RobotPlayer {
 		} else if( myType == RobotType.GUARD ) {
 			new Soldier( rcIn ).code( );
 		} else if( myType == RobotType.VIPER ) {
-			new Soldier( rcIn ).code( );
+			new Viper( rcIn ).code( );
 		} else if( myType == RobotType.TURRET ) {
 			new Soldier( rcIn ).code( );
 		} else if( myType == RobotType.TTM ) {

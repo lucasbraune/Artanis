@@ -172,7 +172,7 @@ public class Soldier extends BasicRobot {
 			// Try to move otherwise.
 
 			if ( rc.isWeaponReady() && readings.enemiesInRange.size() > 0 ) {
-				rc.attackLocation( getWeakestEnemy().location );
+				chooseAndAttackAnEnemy();
 				rc.setIndicatorString(1, "Weapon ready and can see enemies. I'm shooting them.");
 			} else if (rc.isCoreReady() ){
 
@@ -182,7 +182,7 @@ public class Soldier extends BasicRobot {
 				// the closest enemy.
 				
 				int necessaryAdvantage = 0;
-				if ( readings.opponent.size() > 0 && teamGoals.avoidingOpponent )
+				if ( readings.opponents.size() > 0 && teamGoals.avoidingOpponent )
 					necessaryAdvantage = WHAT_COUNTS_AS_ADVANTAGE;
 
 				if ( readings.allies.size() >= readings.enemies.size()-1 + necessaryAdvantage ){
@@ -244,7 +244,7 @@ public class Soldier extends BasicRobot {
 	////// Methods for finding the weakest and the closest enemies //////
 	/////////////////////////////////////////////////////////////////////
 	
-	private  RobotInfo getWeakestEnemy() {
+	void chooseAndAttackAnEnemy() throws GameActionException {
 		ArrayList<RobotInfo> candidates = new ArrayList<RobotInfo>();
 		if ( readings.enemiesInRange.size() > 0 ){
 			for ( int i=0; i<readings.enemiesInRange.size(); i++ ) {
@@ -262,7 +262,7 @@ public class Soldier extends BasicRobot {
 		} else {
 			rc.setIndicatorString( 1 , "No candidate weakest enemy.");
 		}
-		return findWeakestRobot( candidatesArray );
+		rc.attackLocation( findWeakestRobot( candidatesArray ).location );
 	}
 
 	public  RobotInfo getClosestEnemy() {

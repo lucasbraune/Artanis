@@ -16,13 +16,16 @@ public class Readings {
 	public MapLocation myLocation = null;
 	
 	// Robots. Enemies = opponents + zombies
-	public ArrayList<RobotInfo> enemies = new ArrayList<RobotInfo>();
-	public ArrayList<RobotInfo> opponent = new ArrayList<RobotInfo>();
-	public ArrayList<RobotInfo> zombies = new ArrayList<RobotInfo>();
 	public ArrayList<RobotInfo> allies = new ArrayList<RobotInfo>();
-	public ArrayList<RobotInfo> enemiesInRange = new ArrayList<RobotInfo>();
 	
-
+	public ArrayList<RobotInfo> enemies = new ArrayList<RobotInfo>();
+	public ArrayList<RobotInfo> opponents = new ArrayList<RobotInfo>();
+	public ArrayList<RobotInfo> zombies = new ArrayList<RobotInfo>();
+	
+	public ArrayList<RobotInfo> enemiesInRange = new ArrayList<RobotInfo>();
+	public ArrayList<RobotInfo> opponentsInRange = new ArrayList<RobotInfo>();
+	public ArrayList<RobotInfo> zombiesInRange = new ArrayList<RobotInfo>();
+	
 	// Zombie dens
 	public ArrayList<RobotInfo> dens = new ArrayList<RobotInfo>();
 	
@@ -41,7 +44,7 @@ public class Readings {
 		
 		// Update robots and zombie dens
 		enemies.clear();
-		opponent.clear();
+		opponents.clear();
 		zombies.clear();
 		allies.clear();
 		enemiesInRange.clear();
@@ -53,7 +56,7 @@ public class Readings {
 			if ( robots[i].team == myTeam ) {
 				allies.add( robots[i] );
 			} else if ( robots[i].team == myTeam.opponent() ){
-				opponent.add( robots[i] );
+				opponents.add( robots[i] );
 				enemies.add( robots[i] );
 				if( myLocation.distanceSquaredTo( robots[i].location ) <= myType.attackRadiusSquared ) {
 					enemiesInRange.add( robots[i] );

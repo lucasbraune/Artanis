@@ -100,7 +100,7 @@ class BasicRobot {
 			}
 		}
 		
-		if ( !moved && rc.getType() == RobotType.ARCHON ) {
+		if ( !moved && (rc.getType() == RobotType.ARCHON || rc.getType() == RobotType.SCOUT ) ) {
 			teamGoals.askToClearTheWay( rc, (int) Math.max( (double) -patience , 0) );
 		}
 	}

@@ -46,7 +46,6 @@ public class TeamGoals {
 	private static final int RESPONSE_WAITING_PERIOD = 3;
 	Timer responseTimer = new Timer( RESPONSE_WAITING_PERIOD );
 	
-	
 	// Timer to count time since last heard from a scout. If this reaches zero,
 	// more scouts should be built.
 	private static final int SCOUT_CHECK_IN_PERIOD = 100;

@@ -21,7 +21,19 @@ public class Archon extends BasicRobot {
 	private static final int SCOUT_BUILDING_PERIOD = 350;
 	Timer scoutBuildingTimer = new Timer( SCOUT_BUILDING_PERIOD );
 	
-	RobotType typeToBeBuilt = RobotType.SCOUT; 
+	// Used to wait before building a viper again
+	// The timer is being updated only when the archon tries to
+	// build a unit, as opposed to the scout building timer 
+	// which updates every turn. Therefore the much smaller
+	// period.
+	
+	private static final int VIPER_BUILDING_PERIOD = 18;
+	Timer viperBuildingTimer = new Timer( VIPER_BUILDING_PERIOD );
+	
+	RobotType typeToBeBuilt = RobotType.SCOUT;
+	
+	// Ugly hack
+	boolean shouldBuildFirstViper = true; 
 	
 	void repeat() throws GameActionException {
 
@@ -70,7 +82,13 @@ public class Archon extends BasicRobot {
 			Direction dir = findDirectionToBuid();
 			if ( dir != Direction.NONE && rc.isCoreReady() ) {
 				rc.build( dir, typeToBeBuilt );
-				typeToBeBuilt = RobotType.SOLDIER;
+				if ( !viperBuildingTimer.isWaiting() || shouldBuildFirstViper ) {
+					typeToBeBuilt = RobotType.VIPER;
+					viperBuildingTimer.reset();
+					shouldBuildFirstViper = false;
+				} else {
+					typeToBeBuilt = RobotType.SOLDIER;
+				}
 				rc.setIndicatorString(0, "Building robot.");
 				return;
 			}
