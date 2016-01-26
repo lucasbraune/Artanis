@@ -2,6 +2,9 @@ package artanis;
 
 import artanis.Timer;
 import battlecode.common.*;
+import sprint.Communication;
+import sprint.Movement;
+
 import static artanis.TeamGoals.*;
 
 public class Scout extends BasicRobot {
@@ -42,14 +45,63 @@ public class Scout extends BasicRobot {
 			}
 		}
 		
+		if ( teamGoals.targetLocation == null ) {
+			findTarget();
+			if ( myTarget != null ) {
+				if ( rc.canSense( myTarget ) ) {
+					if( readings.dens.size()>0 ) {
+						if( rc.getRoundNum() % 3 == 0 ) {
+							TeamGoals.broadcastLocation(rc, readings.dens.get(0).location, TARGET_LOCATION, MEDIUM_RADIUS);
+						}
+						rc.setIndicatorString(0, "Broadcasting target location.");
+						return;
+					} else {
+						if( rc.isCoreReady() ) {
+							randomScout();
+						}
+					}
+				} else {
+					if( rc.isCoreReady() ) {
+						RobotInfo[] enemyArray = readings.enemies.toArray( new RobotInfo[ readings.enemies.size() ] );
+						moveAvoidingEnemies( rc.getLocation().directionTo( myTarget ), enemyArray );
+						rc.setIndicatorString(0, "Approaching my target.");
+						return;
+					}
+				}
+			}
+		}
+		
 		if( rc.isCoreReady() ) {
 			rc.setIndicatorString(0, "SCOUT AI: Scouting.");
-			spiralScout();
+			randomScout();
 			return;
 		}
 		
 		rc.setIndicatorString(0, "Doing nothing.");
 				
+	}
+	
+	/////////////////////////////////////////////////////////////////
+	/////////////////////// Begin team target ///////////////////////
+	/////////////////////////////////////////////////////////////////
+	
+	private MapLocation myTarget = null;
+	
+	private void findTarget() {
+		if( myTarget == null ) {
+			MapLocation closest = null;
+			if( teamGoals.zombieDens.size()>0 ) {
+				closest = teamGoals.zombieDens.get(0);
+				int distanceSq = closest.distanceSquaredTo( startingLocation );
+				for( MapLocation den : teamGoals.zombieDens ) {
+					if( den.distanceSquaredTo( startingLocation ) < distanceSq ) {
+						closest = den;
+						distanceSq = den.distanceSquaredTo( startingLocation );
+					}
+				}
+			}
+			myTarget = closest;
+		}
 	}
 	
 	/////////////////////////////////////////////////////////////////////

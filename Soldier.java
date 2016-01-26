@@ -29,6 +29,7 @@ public class Soldier extends BasicRobot {
 		
 		// Update readings
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue());
+		teamGoals.update( readings );
 		
 		// Fight enemies
 		if ( readings.enemies.size() > 0 ) {
@@ -38,7 +39,6 @@ public class Soldier extends BasicRobot {
 		}
 		
 		// Update goals and send two signals if near a zombie den or a resource
-		teamGoals.update( readings );
 		teamGoals.replyWithDensAndResources( rc, readings );
 		
 		// Make way for an archon
@@ -66,6 +66,17 @@ public class Soldier extends BasicRobot {
 				return;
 			}
 		}
+		
+		// Move to target Location
+		
+		if( teamGoals.targetLocation != null && rc.isCoreReady() ) {
+			simpleMove( rc.getLocation().directionTo( teamGoals.targetLocation ) );
+			rc.setIndicatorString(0, "SOLDIER AI: Going to target location." );
+			return;
+		} 
+		
+		
+		
 		// Go to soldiers in danger
 		if ( !teamGoals.soldiersInDanger.isEmpty() && rc.isCoreReady() ) {
 			simpleMove( rc.getLocation().directionTo( teamGoals.soldiersInDanger.element().getLocation() ) );
@@ -129,6 +140,8 @@ public class Soldier extends BasicRobot {
 	//////////////////////////////////////////////////////////////////////
 	
 
+	private static final int WHAT_COUNTS_AS_ADVANTAGE = 0;
+	
 	private void fight() throws GameActionException {
 
 		rc.setIndicatorString(1, "Starting fight algorithm.");
@@ -139,9 +152,11 @@ public class Soldier extends BasicRobot {
 			// less than 50% life, simpleMove in the direction opposite to that
 			// pointing to the nearest enemy.
 			
+			// Also run up to three times if avoiding enemies. 
+			
 			if ( rc.getInfectedTurns() > 0 && rc.getHealth() < INFECTED_THRESHOLD * rc.getType().maxHealth ) {
 				for( RobotInfo enemy : readings.enemies ) {
-					if ( enemy.type != RobotType.SCOUT && enemy.type != RobotType.ZOMBIEDEN ) {
+					if ( enemy.type != RobotType.SCOUT && enemy.type != RobotType.ARCHON && enemy.type != RobotType.ZOMBIEDEN ) {
 						if ( rc.isCoreReady() ){
 							moveDefensively( getClosestEnemy() );
 							rc.setIndicatorString(1, "Infected. Running away.");
@@ -165,8 +180,12 @@ public class Soldier extends BasicRobot {
 				// to a 'sweet spot' that is a good place to attack the weakest enemy nearby.
 				// Move defensively otherwise, in a direction that maximizes the distance to
 				// the closest enemy.
+				
+				int necessaryAdvantage = 0;
+				if ( readings.opponent.size() > 0 && teamGoals.avoidingOpponent )
+					necessaryAdvantage = WHAT_COUNTS_AS_ADVANTAGE;
 
-				if ( readings.allies.size() >= readings.enemies.size()-1 ){
+				if ( readings.allies.size() >= readings.enemies.size()-1 + necessaryAdvantage ){
 					moveOffensively( getClosestEnemy() );
 					rc.setIndicatorString(1, "Moving offensively.");
 				} else {

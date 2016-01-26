@@ -24,6 +24,7 @@ public class TeamGoals {
 	// Orders
 	MapLocation stayClear = null;
 	MapLocation targetLocation = null;
+	boolean avoidingOpponent = true;
 		
 	// Message Meanings
 	static final int LET_ME_MOVE = 1000;
@@ -32,11 +33,12 @@ public class TeamGoals {
 	static final int HERE_ARE_PARTS = 1003;
 	static final int WHERE_ARE_THE_RESOURCES = 1004;
 	static final int TARGET_LOCATION = 1004;
+	private static final int WHERE_IS_THE_TARGET = 1006;
 	
 	// Broadcast distances (squared)
 	static final int TINY_RADIUS = 4;
 	static final int SMALLER_RADIUS = 4*RobotType.SOLDIER.sensorRadiusSquared;
-	static final int SMALL_RADIUS = 625;
+	static final int SMALL_RADIUS = 225;
 	static final int MEDIUM_RADIUS = 1500;
 	
 	// Used to wait before asking the location of a den again
@@ -52,6 +54,11 @@ public class TeamGoals {
 		stayClear = null;
 		
 		goalsFromSignals( readings.signals );
+		
+		if( timeSinceLastHeardTargetLocation > TARGET_LOCATION_MEMORY ) {
+			targetLocation = null;
+		}
+		
 		goalsFromDenReadings( readings.dens );
 		goalsFromPartReadings( readings.parts );
 		goalsFromNeutralReadings( readings.neutrals );
@@ -110,8 +117,13 @@ public class TeamGoals {
 
 	public void callForHelp ( RobotController rc, int allies ) throws GameActionException {
 		if( !haveAsked ) {
-			rc.broadcastSignal( SMALL_RADIUS + allies*allies );
-			rc.setIndicatorString(2, "Calling for help");
+			if( avoidingOpponent ) {
+				rc.broadcastSignal( SMALL_RADIUS + allies*allies);
+				rc.setIndicatorString(2, "Calling for help in a small radius.");
+			} else {
+				rc.broadcastSignal( SMALL_RADIUS + allies*allies );
+				rc.setIndicatorString(2, "Calling for help in a small radius.");
+			}
 		}
 	}
 	
@@ -127,6 +139,14 @@ public class TeamGoals {
 		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
 			rc.broadcastMessageSignal( WHERE_ARE_THE_RESOURCES, 0, MEDIUM_RADIUS );
 			rc.setIndicatorString(2, "Asking resource location");
+			haveAsked = true;
+		}
+	}
+	
+	public void askForTargetLocation ( RobotController rc ) throws GameActionException {
+		if ( myType == RobotType.ARCHON || myType == RobotType.SCOUT ) {
+			rc.broadcastMessageSignal( WHERE_IS_THE_TARGET, 0, MEDIUM_RADIUS );
+			rc.setIndicatorString(2, "Asking target location");
 			haveAsked = true;
 		}
 	}
@@ -317,6 +337,8 @@ public class TeamGoals {
 		// Now process message Signals
 		int message;
 		
+		timeSinceLastHeardTargetLocation++;
+		
 		for ( Signal beep : messageSignals ) {
 			message = beep.getMessage()[0];
 			if ( message == LET_ME_MOVE ) {
@@ -326,12 +348,17 @@ public class TeamGoals {
 				askerLocation_Resources = beep.getLocation();
 			} else if ( message == TARGET_LOCATION ) {
 				targetLocation = messageSignalToLocation( beep );
+				timeSinceLastHeardTargetLocation = 0;
+				RobotPlayer.rc.setIndicatorString(1, "Received target location.");
 			} else {
 				processMessageSignalReply( beep );
 			}
 		}
 		
 	}
+	
+	private static final int TARGET_LOCATION_MEMORY = 30;
+	private int timeSinceLastHeardTargetLocation = 10000;
 	
 	private void processCallForHelp( Signal beep ) {
 		// Erase earlier calls for help from the same soldier
@@ -366,8 +393,10 @@ public class TeamGoals {
 		if ( haveAsked ) {
 			if ( myType == RobotType.ARCHON ) {
 				addLocation( signalOrigin, parts );
+				RobotPlayer.rc.setIndicatorString(2, "Resource location received");
 			} else {
 				addLocation( signalOrigin, zombieDens );
+				RobotPlayer.rc.setIndicatorString(2, "Den location received");
 			}
 		}
 		// If someone asked for dens or resource locations
@@ -446,11 +475,12 @@ public class TeamGoals {
 	// This implementation broadcasts the displacement from the archon to the
 	// target location. The displacement is encoded using the
 	// positionToInteger() method.
-	public static void broadcastLocation( RobotController rc, MapLocation location, int messageType, int broadcastRadius ) throws GameActionException {
+	public static void broadcastLocation(RobotController rc, MapLocation location,
+			int messageType, int broadcastRadius ) throws GameActionException {
 		int v[] = new int[2];
 		v[0] = location.x - rc.getLocation().x;
 		v[1] = location.y - rc.getLocation().y;
-		rc.broadcastMessageSignal( positionToInteger(v), messageType, broadcastRadius );
+		rc.broadcastMessageSignal( messageType, positionToInteger(v), broadcastRadius );
 	}
 	
 	private MapLocation messageSignalToLocation( Signal beep ) {

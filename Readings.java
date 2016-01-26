@@ -15,8 +15,10 @@ public class Readings {
 	
 	public MapLocation myLocation = null;
 	
-	// Robots
+	// Robots. Enemies = opponents + zombies
 	public ArrayList<RobotInfo> enemies = new ArrayList<RobotInfo>();
+	public ArrayList<RobotInfo> opponent = new ArrayList<RobotInfo>();
+	public ArrayList<RobotInfo> zombies = new ArrayList<RobotInfo>();
 	public ArrayList<RobotInfo> allies = new ArrayList<RobotInfo>();
 	public ArrayList<RobotInfo> enemiesInRange = new ArrayList<RobotInfo>();
 	
@@ -39,6 +41,8 @@ public class Readings {
 		
 		// Update robots and zombie dens
 		enemies.clear();
+		opponent.clear();
+		zombies.clear();
 		allies.clear();
 		enemiesInRange.clear();
 		dens.clear();
@@ -49,6 +53,7 @@ public class Readings {
 			if ( robots[i].team == myTeam ) {
 				allies.add( robots[i] );
 			} else if ( robots[i].team == myTeam.opponent() ){
+				opponent.add( robots[i] );
 				enemies.add( robots[i] );
 				if( myLocation.distanceSquaredTo( robots[i].location ) <= myType.attackRadiusSquared ) {
 					enemiesInRange.add( robots[i] );
@@ -58,6 +63,7 @@ public class Readings {
 					dens.add( robots[i] );
 				} else {
 					enemies.add( robots[i] );
+					zombies.add( robots[i] );
 					if( myLocation.distanceSquaredTo( robots[i].location ) <= myType.attackRadiusSquared ) {
 						enemiesInRange.add( robots[i] );
 					}
