@@ -37,13 +37,15 @@ public class Scout extends BasicRobot {
 				if ( !teamGoals.neutralRobots.isEmpty() ) { 
 					broadcastLocation( rc, teamGoals.neutralRobots.getLast(), HERE_IS_A_NEUTRAL, MEDIUM_RADIUS );
 				}
+				rc.broadcastMessageSignal(TeamGoals.SCOUT_ALIVE, 0, MEDIUM_RADIUS);
 				groupUpdateTimer.reset();
-				rc.setIndicatorString(1, "Updating group on dens, neutrals and parts.");
+				rc.setIndicatorString(1, "Updating group on dens, neutrals and parts, plus the fact I am alive.");
 			} else {
 				teamGoals.replyWithDensAndResources(rc, readings);
-				rc.setIndicatorString(1, "Replying a location request.");
+				rc.setIndicatorString(1, "Replying a den or resource location request.");
 			}
 		}
+		
 		
 		if ( teamGoals.targetLocation == null ) {
 			findTarget();
@@ -55,10 +57,15 @@ public class Scout extends BasicRobot {
 						}
 						rc.setIndicatorString(0, "Broadcasting target location.");
 						return;
-					} else {
+					} else if( rc.getLocation().distanceSquaredTo( myTarget ) > RobotType.SOLDIER.attackRadiusSquared ) {
 						if( rc.isCoreReady() ) {
-							randomScout();
+							RobotInfo[] enemyArray = readings.enemies.toArray( new RobotInfo[ readings.enemies.size() ] );
+							moveAvoidingEnemies( rc.getLocation().directionTo( myTarget ), enemyArray );
+							rc.setIndicatorString(0, "Approaching my target.");
+							return;
 						}
+					} else {
+						myTarget = null;
 					}
 				} else {
 					if( rc.isCoreReady() ) {

@@ -32,10 +32,10 @@ public class Archon extends BasicRobot {
 		readings.update( rc.getLocation() , rc.senseNearbyRobots(), rc.sensePartLocations(-1), rc.emptySignalQueue() );
 		teamGoals.update( readings );
 		
-		if( !scoutBuildingTimer.isWaiting() ) {
+		if( !scoutBuildingTimer.isWaiting() && !teamGoals.weHaveScouts ) {
 			typeToBeBuilt = RobotType.SCOUT;
-			scoutBuildingTimer.reset();
 			rc.setIndicatorString(1, "The next robot built should be a scout.");
+			scoutBuildingTimer.reset();
 		}
 		
 		if ( rc.isCoreReady() ){
@@ -74,19 +74,7 @@ public class Archon extends BasicRobot {
 				rc.setIndicatorString(0, "Building robot.");
 				return;
 			}
-			
-//			boolean shouldLookHere = true;
-//			if( readings.neutrals.size() > 0 || readings.parts.size() > 0 ) {
-//				 shouldLookHere = shouldLookHere();
-//			}
-//			
-//			if( locationGivenUp != null ) {
-//				rc.setIndicatorString(1, "Ignoring resources near (" + locationGivenUp.y + "," + locationGivenUp.y + ")." );
-//			} else {
-//				rc.setIndicatorString(1, "Not ignoring any resources." );
-//			}
-			
-//			if ( readings.neutrals.size() > 0 && shouldLookHere ) {
+
 			if ( readings.neutrals.size() >0 ) {
 				// Go for neutral robots nearby
 				RobotInfo[] neutralsArray = readings.neutrals.toArray( new RobotInfo[ readings.neutrals.size() ] );
@@ -104,7 +92,6 @@ public class Archon extends BasicRobot {
 				}
 			}
 
-//			if ( readings.parts.size() > 0 && shouldLookHere ) {
 			if ( readings.parts.size() > 0 ) {
 				MapLocation[] partsArray = readings.parts.toArray( new MapLocation[ readings.parts.size() ] );
 
@@ -117,16 +104,6 @@ public class Archon extends BasicRobot {
 			targetLocations = teamGoals.neutralRobots;
 			targetLocations.addAll( teamGoals.parts );
 			
-			MapLocation myLocation = rc.getLocation();
-			int mySensorRadiusSquared = rc.getType().sensorRadiusSquared;
-			
-			Iterator<MapLocation> iterator = targetLocations.iterator();
-			while( iterator.hasNext() ){
-				if( myLocation.distanceSquaredTo( iterator.next() ) <= 4*mySensorRadiusSquared ) {
-					iterator.remove();
-				}
-			}
-
 			if ( !targetLocations.isEmpty() ) {
 				// Go to the nearest resource location known
 				MapLocation[] targetLocationsArray = targetLocations.toArray( new MapLocation[ targetLocations.size() ] ); 
@@ -148,45 +125,6 @@ public class Archon extends BasicRobot {
 		}
 
 	}
-	
-	// In the following piece of code, we have two timers, timer A and timer B, which
-	// alternate counting down ("waiting"). While timer A counts down, CODE A runs, and
-	// while timer B counts down, CODE B runs.
-	
-	//	if( timerA.isWaiting() ) {
-	//		timerB.reset();
-	//		/* CODE A */
-	//	} else {
-	//		/* CODE B */
-	//	}
-	//
-	//	if( !timerB.isWaiting() ) {
-	//		timerA.reset();
-	//	} 
-	
-	private boolean shouldLookHere() {
-		boolean shouldLookHere = ( locationGivenUp == null
-				|| rc.getLocation().distanceSquaredTo( locationGivenUp ) > rc.getType().sensorRadiusSquared );
-		
-		if ( doNotIgnoreTimer.isWaiting() ) {
-			ignoreTimer.reset();
-		} else {
-			locationGivenUp = rc.getLocation();
-		}
-		
-		if ( !doNotIgnoreTimer.isWaiting() ) {
-			doNotIgnoreTimer.reset();
-			locationGivenUp = null;
-		}
-		
-		return shouldLookHere;
-	}
-
-	MapLocation locationGivenUp = null;
-	private static final int GIVE_UP_PERIOD = 10;
-	private static final int RESET_GIVE_UP_PERIOD = 10;
-	private Timer ignoreTimer = new Timer( GIVE_UP_PERIOD );
-	private Timer doNotIgnoreTimer = new Timer( RESET_GIVE_UP_PERIOD );
 
 	private Direction findDirectionToBuid() {
 		Direction dir = randomDirection();

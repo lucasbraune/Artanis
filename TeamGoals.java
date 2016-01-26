@@ -32,8 +32,9 @@ public class TeamGoals {
 	static final int HERE_IS_A_NEUTRAL = 1002;
 	static final int HERE_ARE_PARTS = 1003;
 	static final int WHERE_ARE_THE_RESOURCES = 1004;
-	static final int TARGET_LOCATION = 1004;
-	private static final int WHERE_IS_THE_TARGET = 1006;
+	static final int TARGET_LOCATION = 1005;
+	public static final int WHERE_IS_THE_TARGET = 1006;
+	public static final int SCOUT_ALIVE = 1007;
 	
 	// Broadcast distances (squared)
 	static final int TINY_RADIUS = 4;
@@ -45,6 +46,13 @@ public class TeamGoals {
 	private static final int RESPONSE_WAITING_PERIOD = 3;
 	Timer responseTimer = new Timer( RESPONSE_WAITING_PERIOD );
 	
+	
+	// Timer to count time since last heard from a scout. If this reaches zero,
+	// more scouts should be built.
+	private static final int SCOUT_CHECK_IN_PERIOD = 100;
+	Timer scoutCheckInTimer = new Timer( SCOUT_CHECK_IN_PERIOD );
+	public boolean weHaveScouts =  false;
+	
 	public void update ( Readings readings ) throws GameActionException {
 		myLocation = readings.myLocation;
 		if ( !responseTimer.isWaiting() ) {
@@ -52,6 +60,10 @@ public class TeamGoals {
 			responseTimer.reset();
 		}
 		stayClear = null;
+		
+		if( !scoutCheckInTimer.isWaiting() ) {
+			weHaveScouts = false;
+		}
 		
 		goalsFromSignals( readings.signals );
 		
@@ -73,7 +85,7 @@ public class TeamGoals {
 	private MapLocation askerLocation_Resources = null;
 	
 	// Used to wait before answering a request again
-	private static final int ANSWERING_PERIOD = 10;
+	private static final int ANSWERING_PERIOD = 1;
 	private Timer answeringTimer = new Timer( ANSWERING_PERIOD );
 	
 	void replyWithDensAndResources( RobotController rc, Readings readings ) throws GameActionException {
@@ -343,13 +355,19 @@ public class TeamGoals {
 			message = beep.getMessage()[0];
 			if ( message == LET_ME_MOVE ) {
 				stayClear = beep.getLocation();
+				RobotPlayer.rc.setIndicatorString(1, "Received a move away request.");
 			} else if ( message == WHERE_ARE_THE_RESOURCES ) {
 				someoneAsked_Resources = true;
 				askerLocation_Resources = beep.getLocation();
+				RobotPlayer.rc.setIndicatorString(1, "Received resource location request.");
 			} else if ( message == TARGET_LOCATION ) {
 				targetLocation = messageSignalToLocation( beep );
 				timeSinceLastHeardTargetLocation = 0;
 				RobotPlayer.rc.setIndicatorString(1, "Received target location.");
+			} else if ( message == SCOUT_ALIVE ) {
+				weHaveScouts = true;
+				scoutCheckInTimer.reset();
+				RobotPlayer.rc.setIndicatorString(1, "Received a scout check in.");
 			} else {
 				processMessageSignalReply( beep );
 			}
